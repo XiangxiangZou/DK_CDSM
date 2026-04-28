@@ -1,0 +1,252 @@
+<mujoco model="multi_joint_cable_dirven_space_robot">
+    <!-- ======================================================================
+         绳驱空间机械臂 —— 真实 8 电机拮抗驱动版本
+         ======================================================================
+         与前一版 (multi_joint_space_robot.xml) 的核心区别:
+           - 原版本: 仅 2 个 <position> 执行器, 分别施加在 joint1、joint3 上
+                    (关节级抽象驱动, 无法反映真实绳驱机构)
+           - 本版本: 将驱动下沉到绳索层面, 使用 8 个 <motor tendon="..."> 执行器,
+                    等效于在每根绳索与主连杆 (Link1/Link3/Link5) 连接的铰链处
+                    同轴安装的伺服电机. 电机正转 (ctrl>0) 收紧绳索 (产生张力),
+                    反转 (即对应拮抗侧电机收紧) 放松绳索.
+
+         电机布局 (共 8 个, 恰好 2 + 4 + 2 = 8):
+           ┌─────────────────────────────────┬────────────────┬─────────────────────────┐
+           │   安装位置 (主连杆侧)           │   电机 / 绳索  │    收紧时的运动效果     │
+           ├─────────────────────────────────┼────────────────┼─────────────────────────┤
+           │ Link1 首端 (anchor_base)        │ m11 / cable11  │   spreader1 正向偏转    │
+           │ Link1 首端 (anchor_base)        │ m12 / cable12  │   spreader1 反向偏转    │
+           │ Link3 末端 (target_l3)          │ m13 / cable13  │   spreader1 正向偏转    │
+           │ Link3 末端 (target_l3)          │ m14 / cable14  │   spreader1 反向偏转    │
+           │ Link3 首端 (anchor_l3)          │ m21 / cable21  │   spreader2 正向偏转    │
+           │ Link3 首端 (anchor_l3)          │ m22 / cable22  │   spreader2 反向偏转    │
+           │ Link5 末端 (target_l5)          │ m23 / cable23  │   spreader2 正向偏转    │
+           │ Link5 末端 (target_l5)          │ m24 / cable24  │   spreader2 反向偏转    │
+           └─────────────────────────────────┴────────────────┴─────────────────────────┘
+
+         拮抗控制策略 (在 Python 控制器中实现):
+           - 第一级 spreader1 (驱动 qa = joint1 = joint2):
+               "正向"拮抗对: cable11 + cable13   (两者同步收紧 -> qa 增加)
+               "反向"拮抗对: cable12 + cable14   (两者同步收紧 -> qa 减小)
+               始终给 4 根绳索都保持 >= F_preload 的最小张力以防松弛
+           - 第二级 spreader2 (驱动 qb = joint3 = joint4):
+               "正向"拮抗对: cable21 + cable23
+               "反向"拮抗对: cable22 + cable24
+               同理保持预紧
+
+         机械/几何参数完全对齐 multi_joint_space_robot_model.py:
+           L1=L3=L5=2.0 m, L2=L4=0.2 m, Ls1=Ls2=0.6 m
+           m2=m4=1.161 kg (spreader body), m3=m5=2.866 kg (main arm)
+           Link1 为固定基座, 不参与动力学
+    ====================================================================== -->
+    <compiler angle="radian" coordinate="local" inertiafromgeom="auto"/>
+    <option gravity="0 0 0" integrator="RK4" timestep="0.01"/>
+
+    <visual>
+        <global offwidth="1280" offheight="960"/>
+    </visual>
+
+    <default>
+        <joint type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" damping="2.0"/>
+        <!-- NOTE: 这里 **刻意不写 rgba**. 在当前 MuJoCo 版本下, 如果 <default><geom>
+             里给了 rgba, 它会压过子 geom 上显式声明的 material, 导致所有部件都被涂
+             成默认颜色 (橙黄色); 各 geom 的颜色完全交给各自的 material 指定. -->
+        <geom type="capsule" size="0.05"/>
+        <site size="0.04"/>
+        <!-- 绳索默认属性: 无限细的不可压缩理想绳索;
+             由控制器通过 <motor tendon> 施加主动张力, 此处不设 stiffness/damping -->
+        <tendon width="0.01" rgba="1 1 1 1"/>
+    </default>
+
+    <asset>
+        <material name="mat_main_link" rgba="1 0.55 0 1"/>
+        <material name="mat_spreader"  rgba="0.15 0.35 1.0 1"/>
+        <material name="mat_anchor"    rgba="1 1 1 0"/>
+        <!-- 8 个绳索驱动电机的材质: alpha=0 使其在 MuJoCo 渲染中完全不可见,
+             同时每个 motor_*_geom 会附加 contype=0 / conaffinity=0 禁用碰撞,
+             mass=0 本身也不参与动力学 -> 物理上等价于"不存在",
+             仅保留其 XML 定义作为机构装配位置的文档. -->
+        <material name="mat_motor"     rgba="0.25 0.25 0.28 0"/>
+    </asset>
+
+    <worldbody>
+        <light pos="0 0 10" dir="0 0 -1" diffuse="1 1 1"/>
+
+        <site name="anchor_base" pos="0 0 0" material="mat_anchor"/>
+
+        <!-- ================================================================ -->
+        <!-- Link 1: 固定基座 (L1 = 2.0 m)                                     -->
+        <!-- ================================================================ -->
+        <body name="link1" pos="0 0 0">
+            <geom name="geom_link1" fromto="0 0 0 2.0 0 0" size="0.05" material="mat_main_link" mass="2.866"/>
+
+            <!-- Link1 首端铰链处的 2 个绳索电机 (m11 / m12), 与 anchor_base / cable11 / cable12 同轴
+                 contype=conaffinity=0 -> 禁止参与碰撞; material=mat_motor (alpha=0) -> 渲染不可见 -->
+            <geom name="motor_m11_geom" type="cylinder" pos="0 0  0.09" euler="0 0 0"
+                  size="0.06 0.02" material="mat_motor" mass="0" contype="0" conaffinity="0"/>
+            <geom name="motor_m12_geom" type="cylinder" pos="0 0 -0.09" euler="0 0 0"
+                  size="0.06 0.02" material="mat_motor" mass="0" contype="0" conaffinity="0"/>
+
+            <!-- ============================================================ -->
+            <!-- Link 2: 第一级 spreader 主轴 (m2=1.161, L2=0.2)                -->
+            <!-- ============================================================ -->
+            <body name="link2" pos="2.0 0 0">
+                <joint name="joint1"/>
+                <inertial pos="0.1 0 0" mass="1.161" diaginertia="0.00387 0.00387 0.00387"/>
+                <geom name="geom_link2" fromto="0 0 0 0.2 0 0" size="0.04" material="mat_spreader" mass="0"/>
+
+                <!-- 第一级十字架 (Ls1 = 0.6 m) -->
+                <geom name="geom_spreader1" fromto="0.1 -0.3 0 0.1 0.3 0" size="0.03" material="mat_spreader" mass="0"/>
+                <site name="spreader1_top" pos="0.1  0.3 0" material="mat_anchor"/>
+                <site name="spreader1_bot" pos="0.1 -0.3 0" material="mat_anchor"/>
+
+                <!-- ======================================================== -->
+                <!-- Link 3: 第一级主连杆 (m3=2.866, L3=2.0)                    -->
+                <!-- ======================================================== -->
+                <body name="link3" pos="0.2 0 0">
+                    <joint name="joint2"/>
+                    <geom name="geom_link3" fromto="0 0 0 2.0 0 0" size="0.05" material="mat_main_link" mass="2.866"/>
+
+                    <site name="anchor_l3" pos="0   0 0" material="mat_anchor"/>   <!-- p2: 第二级绳起点 -->
+                    <site name="target_l3" pos="2.0 0 0" material="mat_anchor"/>   <!-- p3: 第一级绳终点 -->
+
+                    <!-- Link3 首端的 2 个绳索电机 (m21 / m22), 与 cable21 / cable22 同轴 -->
+                    <geom name="motor_m21_geom" type="cylinder" pos="0 0  0.09"
+                          size="0.06 0.02" material="mat_motor" mass="0" contype="0" conaffinity="0"/>
+                    <geom name="motor_m22_geom" type="cylinder" pos="0 0 -0.09"
+                          size="0.06 0.02" material="mat_motor" mass="0" contype="0" conaffinity="0"/>
+                    <!-- Link3 末端的 2 个绳索电机 (m13 / m14), 与 cable13 / cable14 同轴 -->
+                    <geom name="motor_m13_geom" type="cylinder" pos="2.0 0  0.09"
+                          size="0.06 0.02" material="mat_motor" mass="0" contype="0" conaffinity="0"/>
+                    <geom name="motor_m14_geom" type="cylinder" pos="2.0 0 -0.09"
+                          size="0.06 0.02" material="mat_motor" mass="0" contype="0" conaffinity="0"/>
+
+                    <!-- ==================================================== -->
+                    <!-- Link 4: 第二级 spreader 主轴 (m4=1.161, L4=0.2)        -->
+                    <!-- ==================================================== -->
+                    <body name="link4" pos="2.0 0 0">
+                        <joint name="joint3"/>
+                        <inertial pos="0.1 0 0" mass="1.161" diaginertia="0.00387 0.00387 0.00387"/>
+                        <geom name="geom_link4" fromto="0 0 0 0.2 0 0" size="0.04" material="mat_spreader" mass="0"/>
+
+                        <!-- 第二级十字架 (Ls2 = 0.6 m) -->
+                        <geom name="geom_spreader2" fromto="0.1 -0.3 0 0.1 0.3 0" size="0.03" material="mat_spreader" mass="0"/>
+                        <site name="spreader2_top" pos="0.1  0.3 0" material="mat_anchor"/>
+                        <site name="spreader2_bot" pos="0.1 -0.3 0" material="mat_anchor"/>
+
+                        <!-- ================================================ -->
+                        <!-- Link 5: 第二级主连杆 (m5=2.866, L5=2.0)            -->
+                        <!-- ================================================ -->
+                        <body name="link5" pos="0.2 0 0">
+                            <joint name="joint4"/>
+                            <geom name="geom_link5" fromto="0 0 0 2.0 0 0" size="0.05" material="mat_main_link" mass="2.866"/>
+
+                            <site name="anchor_l5" pos="0   0 0" material="mat_anchor"/>
+                            <site name="target_l5" pos="2.0 0 0" material="mat_anchor"/>
+
+                            <!-- Link5 末端的 2 个绳索电机 (m23 / m24), 与 cable23 / cable24 同轴 -->
+                            <geom name="motor_m23_geom" type="cylinder" pos="2.0 0  0.09"
+                                  size="0.06 0.02" material="mat_motor" mass="0" contype="0" conaffinity="0"/>
+                            <geom name="motor_m24_geom" type="cylinder" pos="2.0 0 -0.09"
+                                  size="0.06 0.02" material="mat_motor" mass="0" contype="0" conaffinity="0"/>
+
+                            <site name="end_effector" pos="2.0 0 0" size="0.08" rgba="1 1 0 1"/>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+
+    <!-- ====================================================================
+         机械耦合: 十字架 spreader 的刚性几何迫使同侧两关节同步转动
+         joint1 ≡ joint2,  joint3 ≡ joint4  (与 Python 2-DOF 解析模型严格一致)
+    ==================================================================== -->
+    <equality>
+        <joint joint1="joint2" joint2="joint1" polycoef="0 1 0 0 0"
+               solref="0.005 1" solimp="0.99 0.999 0.0001"/>
+        <joint joint1="joint4" joint2="joint3" polycoef="0 1 0 0 0"
+               solref="0.005 1" solimp="0.99 0.999 0.0001"/>
+    </equality>
+
+    <!-- ====================================================================
+         8 根绳索 (spatial tendon): 几何路径和原模型一致
+         每根绳的两端分别固定在"主连杆侧铰链" (motor 所在位置) 与
+         "spreader 上/下顶端 site". 电机通过收放绳索改变这个 spatial 距离
+         所需的自由绳长, 进而产生张力 / 松弛.
+    ==================================================================== -->
+    <tendon>
+        <spatial name="cable11"><site site="anchor_base"/><site site="spreader1_top"/></spatial>
+        <spatial name="cable12"><site site="anchor_base"/><site site="spreader1_bot"/></spatial>
+        <spatial name="cable13"><site site="target_l3"/>  <site site="spreader1_top"/></spatial>
+        <spatial name="cable14"><site site="target_l3"/>  <site site="spreader1_bot"/></spatial>
+
+        <spatial name="cable21"><site site="anchor_l3"/>  <site site="spreader2_top"/></spatial>
+        <spatial name="cable22"><site site="anchor_l3"/>  <site site="spreader2_bot"/></spatial>
+        <spatial name="cable23"><site site="target_l5"/>  <site site="spreader2_top"/></spatial>
+        <spatial name="cable24"><site site="target_l5"/>  <site site="spreader2_bot"/></spatial>
+    </tendon>
+
+    <!-- ====================================================================
+         8 绳索电机 (force-controlled cable winches)
+         - <motor tendon="...">: 正 ctrl 产生 "使 tendon 缩短" 方向的广义力,
+           物理上等价于电机正转卷收绳索 -> 绳索张力.
+         - gear = "1"  :  施加到 tendon 上的实际张力 (N) = ctrl * gear = ctrl.
+                          即控制接口直接以牛顿为单位, 1 ctrl 单位 = 1 N 绳索张力,
+                          方便上层拮抗映射器直接写物理力.
+         - ctrlrange = [0, 2000]  :  绳只能拉不能推, 下限 0;
+                          上限 2000 N 为电机峰值牵拉力, 可按实际伺服电机规格调整.
+         - <actuatorfrc> 传感器由此直接读出每根绳的实际张力 (N).
+         - 控制接口顺序: [f11, f12, f13, f14, f21, f22, f23, f24]
+           上层控制器在拮抗策略下应保证:
+             (1) 同一 spreader 上下 4 根绳都 >= F_preload (通常 5~20 N), 防止松弛;
+             (2) 同侧对   (c11, c13) 与 (c12, c14) 分别共用同一张力 F1+ / F1-;
+                 (c21, c23) 与 (c22, c24) 分别共用同一张力 F2+ / F2-;
+                 差值  (F1+ − F1-) / (F2+ − F2-) 决定 spreader 的净驱动力矩.
+    ==================================================================== -->
+    <actuator>
+        <motor name="winch_c11" tendon="cable11" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+        <motor name="winch_c12" tendon="cable12" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+        <motor name="winch_c13" tendon="cable13" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+        <motor name="winch_c14" tendon="cable14" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+        <motor name="winch_c21" tendon="cable21" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+        <motor name="winch_c22" tendon="cable22" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+        <motor name="winch_c23" tendon="cable23" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+        <motor name="winch_c24" tendon="cable24" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+    </actuator>
+
+    <!-- ====================================================================
+         传感器 (Sensors)
+         ====================================================================
+         MuJoCo viewer 左侧 "Sensor" 面板会自动绘制全部 <sensor> 读数曲线,
+         同时可用 data.sensordata[sensor_id] 在 Python 中读取.
+
+         (1) 8 根绳索拉力传感器 —— <actuatorfrc>
+             对 <motor tendon="..."> 型执行器, actuator_force = ctrl * gear,
+             由于本模型 gear=1 且绳只能拉不能推 (ctrlrange [0, 2000] N),
+             故 actuatorfrc 的读数直接等于该根绳索被施加的实际张力 (N).
+             命名: tension_c11 ... tension_c24, 与 cable11 ... cable24 一一对应.
+
+         (2) 4 个关节旋转角度编码器 —— <jointpos>
+             单位: rad. hinge 关节 axis=(0,0,1), 零位构型 (机械臂完全打直)
+             下 qpos=0, 沿 z 轴右手法则为正. 因此编码器读数与机械臂真实角度
+             的正负严格一致: 打直 -> 0; 往 +z 侧 (俯视逆时针) -> 正;
+             往 -z 侧 (俯视顺时针) -> 负. 量程天然继承 joint range [-π/2, π/2].
+             如需在 Python 中转换为度: np.rad2deg(data.sensordata[sid]).
+    ==================================================================== -->
+    <sensor>
+        <actuatorfrc name="tension_c11" actuator="winch_c11"/>
+        <actuatorfrc name="tension_c12" actuator="winch_c12"/>
+        <actuatorfrc name="tension_c13" actuator="winch_c13"/>
+        <actuatorfrc name="tension_c14" actuator="winch_c14"/>
+        <actuatorfrc name="tension_c21" actuator="winch_c21"/>
+        <actuatorfrc name="tension_c22" actuator="winch_c22"/>
+        <actuatorfrc name="tension_c23" actuator="winch_c23"/>
+        <actuatorfrc name="tension_c24" actuator="winch_c24"/>
+
+        <jointpos name="encoder_joint1" joint="joint1"/>
+        <jointpos name="encoder_joint2" joint="joint2"/>
+        <jointpos name="encoder_joint3" joint="joint3"/>
+        <jointpos name="encoder_joint4" joint="joint4"/>
+    </sensor>
+</mujoco>

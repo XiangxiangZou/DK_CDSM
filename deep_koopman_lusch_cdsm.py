@@ -436,7 +436,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--val_traj", type=int, default=300)
     p.add_argument("--traj_len", type=int, default=70)
     p.add_argument("--dt", type=float, default=0.02)
-    p.add_argument("--tau_max", type=float, default=80000.0)
+    p.add_argument("--tau_max", type=float, default=8.0)
     p.add_argument("--torque_smooth", type=float, default=0.08)
     p.add_argument("--q_limit_margin", type=float, default=0.12)
 

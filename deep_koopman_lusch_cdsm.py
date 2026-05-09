@@ -429,14 +429,14 @@ def plot_prediction_rollout(
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Lusch 2018 Deep Koopman reproduction on CDSM.")
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"])
+    p.add_argument("--device", type=str, default="cuda", choices=["auto", "cpu", "cuda"])
 
     # Data.
     p.add_argument("--train_traj", type=int, default=1800)
     p.add_argument("--val_traj", type=int, default=300)
     p.add_argument("--traj_len", type=int, default=70)
     p.add_argument("--dt", type=float, default=0.02)
-    p.add_argument("--tau_max", type=float, default=8.0)
+    p.add_argument("--tau_max", type=float, default=80000.0)
     p.add_argument("--torque_smooth", type=float, default=0.08)
     p.add_argument("--q_limit_margin", type=float, default=0.12)
 
@@ -449,7 +449,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--activation", type=str, default="elu", choices=["relu", "elu", "tanh", "sigmoid"])
 
     # Training.
-    p.add_argument("--epochs", type=int, default=120)
+    p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--steps_per_epoch", type=int, default=160)
     p.add_argument("--batch_size", type=int, default=256)
     p.add_argument("--pred_steps", type=int, default=10)

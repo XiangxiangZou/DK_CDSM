@@ -177,7 +177,7 @@
            给约束求解和控制饱和留出余量.
     ==================================================================== -->
     <actuator>
-        <position name="motor_qa" joint="joint1" kp="400" kv="40" ctrllimited="true" ctrlrange="-1.5 1.5"/>
-        <position name="motor_qb" joint="joint3" kp="400" kv="40" ctrllimited="true" ctrlrange="-1.5 1.5"/>
+        <motor name="motor_qa" joint="joint1" gear="1" ctrllimited="true" ctrlrange="-50 50"/>
+        <motor name="motor_qb" joint="joint3" gear="1" ctrllimited="true" ctrlrange="-50 50"/>
     </actuator>
 </mujoco>

@@ -194,8 +194,8 @@
          - gear = "1"  :  施加到 tendon 上的实际张力 (N) = ctrl * gear = ctrl.
                           即控制接口直接以牛顿为单位, 1 ctrl 单位 = 1 N 绳索张力,
                           方便上层拮抗映射器直接写物理力.
-         - ctrlrange = [0, 2000]  :  绳只能拉不能推, 下限 0;
-                          上限 2000 N 为电机峰值牵拉力, 可按实际伺服电机规格调整.
+         - ctrlrange 上限 2000 N 已关闭 (ctrllimited/ctrlrange 已注释);
+           绳仍只能拉不能推, 预紧由上层 F_preload 保证.
          - <actuatorfrc> 传感器由此直接读出每根绳的实际张力 (N).
          - 控制接口顺序: [f11, f12, f13, f14, f21, f22, f23, f24]
            上层控制器在拮抗策略下应保证:
@@ -205,14 +205,19 @@
                  差值  (F1+ − F1-) / (F2+ − F2-) 决定 spreader 的净驱动力矩.
     ==================================================================== -->
     <actuator>
+        <!-- ctrllimited/ctrlrange 张力上限 2000N 已关闭; gear=1 时 ctrl 仍为张力 (N) -->
+        <motor name="winch_c11" tendon="cable11" gear="1"/>
+        <motor name="winch_c12" tendon="cable12" gear="1"/>
+        <motor name="winch_c13" tendon="cable13" gear="1"/>
+        <motor name="winch_c14" tendon="cable14" gear="1"/>
+        <motor name="winch_c21" tendon="cable21" gear="1"/>
+        <motor name="winch_c22" tendon="cable22" gear="1"/>
+        <motor name="winch_c23" tendon="cable23" gear="1"/>
+        <motor name="winch_c24" tendon="cable24" gear="1"/>
+        <!--
         <motor name="winch_c11" tendon="cable11" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
-        <motor name="winch_c12" tendon="cable12" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
-        <motor name="winch_c13" tendon="cable13" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
-        <motor name="winch_c14" tendon="cable14" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
-        <motor name="winch_c21" tendon="cable21" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
-        <motor name="winch_c22" tendon="cable22" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
-        <motor name="winch_c23" tendon="cable23" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
-        <motor name="winch_c24" tendon="cable24" gear="1" ctrllimited="true" ctrlrange="0 2000"/>
+        ...
+        -->
     </actuator>
 
     <!-- ====================================================================
@@ -223,7 +228,7 @@
 
          (1) 8 根绳索拉力传感器 —— <actuatorfrc>
              对 <motor tendon="..."> 型执行器, actuator_force = ctrl * gear,
-             由于本模型 gear=1 且绳只能拉不能推 (ctrlrange [0, 2000] N),
+             由于本模型 gear=1 且绳只能拉不能推 (ctrl 下限由上层保证 >= F_preload),
              故 actuatorfrc 的读数直接等于该根绳索被施加的实际张力 (N).
              命名: tension_c11 ... tension_c24, 与 cable11 ... cable24 一一对应.
 

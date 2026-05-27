@@ -2,7 +2,7 @@
 cdsm_mpc_tracking_compare.py
 ============================
 一键运行整套流程（尽量低耦合、便于维护）：
-1) 训练残差 EDMD（名义模型一步残差）
+1) 训练受控 Koopman 混合模型 (psi 多步滚动 + 残差读出)
 2) 用训练出来的混合模型与名义模型做 MPC 轨迹跟踪对比
 
 对比协议（公平性）
@@ -10,7 +10,7 @@ cdsm_mpc_tracking_compare.py
 - 两套控制器使用 **同一套** NMPC 结构（代价函数、约束、求解器、超参数）。
 - 唯一区别：预测模型
     - Nominal-MPC:  x_{k+1} = f_nom(x_k, u_k)
-    - Hybrid-MPC:   x_{k+1} = f_nom(x_k, u_k) + r_hat(x_k, u_k)
+- Hybrid-MPC:   受控 Koopman 多步滚动  x_{k+1}=f_nom(x_k,u_k)+C(A psi_k+B u_k),  psi_{k+1}=A psi_k+B u_k
 - 真值被控对象：MuJoCo 绳驱模型（multi_joint_cable_dirven_space_robot.xml），
   控制输入为等效关节力矩 u=[tau_a,tau_b]，通过拮抗绳驱映射作用到 8 根绳执行器。
 
@@ -19,7 +19,7 @@ cdsm_mpc_tracking_compare.py
 默认：训练 + 对比（推荐）
     python cdsm_mpc_tracking_compare.py
 
-跳过训练：直接加载 residual EDMD 模型并对比
+跳过训练：直接加载 hybrid Koopman 模型并对比
     python cdsm_mpc_tracking_compare.py --skip_train --model_dir <dir>
 
 仅训练（不跑 MPC）
@@ -88,7 +88,7 @@ IDX_F1M = [1, 3]
 IDX_F2P = [4, 6]
 IDX_F2M = [5, 7]
 F_PRELOAD = 20.0
-F_MAX_CABLE = 2000.0
+# F_MAX_CABLE = 2000.0  # 每根绳张力上限 (N); 与 XML ctrlrange 上限一致 —— 已关闭
 
 
 def _require_mujoco() -> object:
@@ -211,18 +211,20 @@ def compute_tendon_jacobian_fd(
 def _solve_antagonistic_pair(
     m_p: float, m_m: float, tau_des: float, f_pre: float, f_max: float
 ) -> Tuple[float, float, float]:
-    u_max = f_max - f_pre
+    # u_max = f_max - f_pre  # 绳索张力上限裁切 (已关闭)
     tau_base = (m_p + m_m) * f_pre
     tau_eff = tau_des - tau_base
     eps = 1e-12
     candidates: List[Tuple[float, float, float, float]] = [(0.0, 0.0, abs(tau_eff), 0.0)]
     if abs(m_p) > eps:
         u = max(tau_eff / m_p, 0.0)
-        u_clip = min(u, u_max)
+        # u_clip = min(u, u_max)
+        u_clip = u
         candidates.append((u_clip, 0.0, abs(tau_eff - m_p * u_clip), u_clip))
     if abs(m_m) > eps:
         u = max(tau_eff / m_m, 0.0)
-        u_clip = min(u, u_max)
+        # u_clip = min(u, u_max)
+        u_clip = u
         candidates.append((0.0, u_clip, abs(tau_eff - m_m * u_clip), u_clip))
     u_p, u_m, res, _ = min(candidates, key=lambda c: (c[2], c[3]))
     return f_pre + u_p, f_pre + u_m, res
@@ -237,7 +239,7 @@ def cable_antagonistic_map(
     dof_j3: int,
     dof_j4: int,
     f_pre: float = F_PRELOAD,
-    f_max: float = F_MAX_CABLE,
+    # f_max: float = F_MAX_CABLE,  # 绳索张力上限 (已关闭)
 ) -> np.ndarray:
     a = J[:, dof_j1] + J[:, dof_j2]
     b = J[:, dof_j3] + J[:, dof_j4]
@@ -245,8 +247,8 @@ def cable_antagonistic_map(
     m_m1 = a[IDX_F1M[0]] + a[IDX_F1M[1]]
     m_p2 = b[IDX_F2P[0]] + b[IDX_F2P[1]]
     m_m2 = b[IDX_F2M[0]] + b[IDX_F2M[1]]
-    f1p, f1m, _ = _solve_antagonistic_pair(m_p1, m_m1, tau_a_des, f_pre, f_max)
-    f2p, f2m, _ = _solve_antagonistic_pair(m_p2, m_m2, tau_b_des, f_pre, f_max)
+    f1p, f1m, _ = _solve_antagonistic_pair(m_p1, m_m1, tau_a_des, f_pre, 0.0)
+    f2p, f2m, _ = _solve_antagonistic_pair(m_p2, m_m2, tau_b_des, f_pre, 0.0)
     F = np.empty(8, dtype=np.float64)
     F[IDX_F1P] = f1p
     F[IDX_F1M] = f1m
@@ -313,6 +315,14 @@ class Normalizer:
         return np.asarray(x_norm, dtype=np.float64) * self.std + self.mean
 
 
+def build_state_lift_features(x_raw: np.ndarray) -> np.ndarray:
+    """Markov 状态提升 (不含 u): [sin(qa), cos(qa), sin(qb), cos(qb), dqa, dqb]."""
+    x_raw = np.atleast_2d(np.asarray(x_raw, dtype=np.float64))
+    qa = x_raw[:, 0:1]
+    qb = x_raw[:, 1:2]
+    return np.hstack([np.sin(qa), np.cos(qa), np.sin(qb), np.cos(qb), x_raw[:, 2:4]])
+
+
 def build_feature_vector(x_raw: np.ndarray, u_raw: np.ndarray) -> np.ndarray:
     """
     z = [sin(qa), cos(qa), sin(qb), cos(qb), dqa, dqb, tau_a, tau_b]
@@ -367,6 +377,16 @@ def rbf_dictionary(z_norm: np.ndarray, centers: np.ndarray, sigma: float) -> np.
     sqdist = np.sum(diff * diff, axis=2)
     rbf = np.exp(-0.5 * sqdist / (sigma * sigma))
     return np.hstack([np.ones((z_norm.shape[0], 1)), z_norm, rbf])
+
+
+def _psi_dictionary(z_norm: np.ndarray, dictionary: str, centers: Optional[np.ndarray], sigma: Optional[float]) -> np.ndarray:
+    if dictionary == "hermite":
+        return hermite_dictionary(z_norm)
+    if dictionary == "rbf":
+        if centers is None or sigma is None:
+            raise RuntimeError("RBF dictionary missing centers or sigma.")
+        return rbf_dictionary(z_norm, centers, float(sigma))
+    raise ValueError(f"Unknown dictionary: {dictionary}")
 
 
 @dataclass
@@ -500,6 +520,192 @@ def load_residual_model(model_dir: Path) -> ResidualEdmdModel:
     )
 
 
+# ============================================================
+# Controlled Koopman hybrid (multi-step rollout in psi)
+#   psi_{k+1} = A psi_k + B u_k
+#   r_k       = C psi_{k+1}
+#   x_{k+1}   = f_nom(x_k, u_k) + r_k
+# ============================================================
+class HybridKoopmanModel:
+    """受控 Koopman 混合模型: MPC 内用 psi 多步开环滚动, 非一步 residual 串联."""
+
+    def __init__(
+        self,
+        A: np.ndarray,
+        B: np.ndarray,
+        C: np.ndarray,
+        x_norm: Normalizer,
+        dictionary: str,
+        centers: Optional[np.ndarray] = None,
+        sigma: Optional[float] = None,
+        cond_number: float = 0.0,
+        psi_dim: int = 0,
+    ) -> None:
+        self.A = np.asarray(A, dtype=np.float64)
+        self.B = np.asarray(B, dtype=np.float64)
+        self.C = np.asarray(C, dtype=np.float64)
+        self.x_norm = x_norm
+        self.dictionary = dictionary
+        self.centers = centers
+        self.sigma = sigma
+        self.cond_number = float(cond_number)
+        self.psi_dim = int(psi_dim)
+
+    def lift(self, x: np.ndarray) -> np.ndarray:
+        x2 = np.atleast_2d(np.asarray(x, dtype=np.float64))
+        z = build_state_lift_features(x2)
+        zn = self.x_norm.transform(z)
+        psi = _psi_dictionary(zn, self.dictionary, self.centers, self.sigma)
+        return psi.reshape(-1)
+
+    def predict_hybrid_next(
+        self,
+        nominal: CdsmRigidNominalModel,
+        x: np.ndarray,
+        u: np.ndarray,
+        dt: float,
+    ) -> np.ndarray:
+        """单步 (与 rollout 第一步一致)."""
+        u = np.asarray(u, dtype=np.float64).reshape(2)
+        psi = self.lift(x)
+        psi_next = self.A @ psi + self.B @ u
+        r = self.C @ psi_next
+        return predict_next_nominal(nominal, x, u, dt) + r
+
+    def rollout_hybrid(
+        self,
+        nominal: CdsmRigidNominalModel,
+        x0: np.ndarray,
+        u_seq: np.ndarray,
+        dt: float,
+    ) -> np.ndarray:
+        """
+        Koopman 多步开环滚动 (MPC 预测用):
+            psi_0 = lift(x0)
+            for k: psi <- A psi + B u_k;  x <- f_nom(x,u_k) + C psi
+        """
+        u_seq = np.asarray(u_seq, dtype=np.float64)
+        X = np.zeros((u_seq.shape[0] + 1, 4), dtype=np.float64)
+        x = np.asarray(x0, dtype=np.float64).reshape(4)
+        psi = self.lift(x)
+        X[0] = x
+        for k, u in enumerate(u_seq):
+            u = u.reshape(2)
+            psi = self.A @ psi + self.B @ u
+            r = self.C @ psi
+            x = predict_next_nominal(nominal, x, u, dt) + r
+            X[k + 1] = x
+        return X
+
+
+def fit_hybrid_koopman(
+    x: np.ndarray,
+    u: np.ndarray,
+    x_next: np.ndarray,
+    r: np.ndarray,
+    cfg: ResidualEdmdConfig,
+) -> HybridKoopmanModel:
+    """
+    1) 在 psi(x) 上拟合受控 Koopman:  psi_{k+1} ≈ A psi_k + B u_k
+    2) 拟合残差读出:                 r_k     ≈ C (A psi_k + B u_k)
+    """
+    z = build_state_lift_features(x)
+    z_next = build_state_lift_features(x_next)
+    x_norm = Normalizer.fit(z)
+    zn = x_norm.transform(z)
+    zn_next = x_norm.transform(z_next)
+
+    centers = None
+    sigma = None
+    if cfg.dictionary == "rbf":
+        n_clusters = min(int(cfg.rbf_centers), zn.shape[0])
+        kmeans = MiniBatchKMeans(
+            n_clusters=n_clusters, random_state=int(cfg.rbf_seed), batch_size=256, n_init=3
+        )
+        kmeans.fit(zn)
+        centers = kmeans.cluster_centers_
+        sigma = float(cfg.rbf_sigma) if cfg.rbf_sigma is not None else estimate_rbf_sigma(centers)
+
+    psi = _psi_dictionary(zn, cfg.dictionary, centers, sigma)
+    psi_next_target = _psi_dictionary(zn_next, cfg.dictionary, centers, sigma)
+
+    zu = np.hstack([psi, u])
+    gram = zu.T @ zu
+    reg = float(cfg.ridge) * np.eye(gram.shape[0])
+    ab = np.linalg.solve(gram + reg, zu.T @ psi_next_target)
+    A = ab[: psi.shape[1], :].T
+    B = ab[psi.shape[1] :, :].T
+
+    psi_pred = psi @ A.T + u @ B.T
+    c_gram = psi_pred.T @ psi_pred
+    c_reg = float(cfg.ridge) * np.eye(c_gram.shape[0])
+    C = np.linalg.solve(c_gram + c_reg, psi_pred.T @ r).T
+
+    cond_number = float(np.linalg.cond(gram))
+    return HybridKoopmanModel(
+        A=A,
+        B=B,
+        C=C,
+        x_norm=x_norm,
+        dictionary=cfg.dictionary,
+        centers=centers,
+        sigma=sigma,
+        cond_number=cond_number,
+        psi_dim=int(psi.shape[1]),
+    )
+
+
+def save_hybrid_koopman(path: Path, model: HybridKoopmanModel, cfg: ResidualEdmdConfig) -> None:
+    payload = {
+        "A": model.A,
+        "B": model.B,
+        "C": model.C,
+        "x_mean": model.x_norm.mean,
+        "x_std": model.x_norm.std,
+        "dictionary": np.array([cfg.dictionary]),
+        "ridge": np.array([cfg.ridge]),
+        "rbf_centers": np.array([cfg.rbf_centers]),
+        "rbf_seed": np.array([cfg.rbf_seed]),
+        "cond_number": np.array([model.cond_number]),
+        "psi_dim": np.array([model.psi_dim]),
+        "model_type": np.array(["hybrid_koopman_rollout"]),
+    }
+    if model.centers is not None:
+        payload["centers"] = model.centers
+    if model.sigma is not None:
+        payload["sigma"] = np.array([float(model.sigma)])
+    np.savez(path, **payload)
+
+
+def load_hybrid_koopman(model_dir: Path) -> HybridKoopmanModel:
+    npz_path = model_dir / "hybrid_koopman_model.npz"
+    if not npz_path.exists():
+        npz_path = model_dir / "residual_edmd_model.npz"
+    if not npz_path.exists():
+        raise FileNotFoundError(f"Hybrid Koopman model not found in {model_dir}")
+    data = np.load(npz_path, allow_pickle=True)
+    if "A" not in data or "B" not in data or "C" not in data:
+        raise ValueError(
+            f"{npz_path} is legacy one-step residual format. Re-train with current script "
+            "to produce hybrid_koopman_model.npz (controlled Koopman rollout)."
+        )
+    dictionary = str(data["dictionary"][0])
+    x_norm = Normalizer(data["x_mean"], data["x_std"])
+    centers = data["centers"] if "centers" in data else None
+    sigma = float(data["sigma"][0]) if "sigma" in data else None
+    return HybridKoopmanModel(
+        A=data["A"],
+        B=data["B"],
+        C=data["C"],
+        x_norm=x_norm,
+        dictionary=dictionary,
+        centers=centers,
+        sigma=sigma,
+        cond_number=float(data["cond_number"][0]) if "cond_number" in data else 0.0,
+        psi_dim=int(data["psi_dim"][0]) if "psi_dim" in data else int(data["A"].shape[0]),
+    )
+
+
 # -----------------------------
 # NMPC (direct shooting)
 # -----------------------------
@@ -574,7 +780,8 @@ def pd_torque(
     tau_max: float,
 ) -> np.ndarray:
     tau = kp * (q_ref - q) + kd * (dq_ref - dq)
-    return np.clip(tau, -tau_max, tau_max)
+    # return np.clip(tau, -tau_max, tau_max)  # PD 采数力矩限幅 (已关闭)
+    return tau
 
 
 def collect_pd_trajectories(
@@ -618,7 +825,7 @@ def collect_pd_trajectories(
 
             q = data.qpos[indices["active_qpos"]]
             dq = data.qvel[indices["active_dof"]]
-            tau = pd_torque(q, dq, q_ref, dq_ref, kp, kd, float(cfg.tau_max))
+            tau = pd_torque(q, dq, q_ref, dq_ref, kp, kd, 0.0)  # tau_max 限幅已关闭
 
             J = compute_tendon_jacobian_fd(model, scratch, data.qpos.copy(), indices["tendon_ids"])
             F_cable = cable_antagonistic_map(
@@ -650,7 +857,7 @@ def build_residual_dataset(
     for i in range(x.shape[0]):
         xp_nom[i] = nominal.step(x[i], u[i], dt=dt, apply_joint_limits=True)
     r = xp_true - xp_nom
-    return x, u, r
+    return x, u, r, xp_true
 
 
 def train_residual_edmd_end2end(
@@ -661,18 +868,22 @@ def train_residual_edmd_end2end(
     pd_cfg: PDCollectConfig,
     edmd_cfg: ResidualEdmdConfig,
     out_dir: Path,
-) -> ResidualEdmdModel:
+) -> HybridKoopmanModel:
     model, data, scratch, indices = load_cable_model(xml, dt)
     raw = collect_pd_trajectories(model, data, scratch, indices, pd_cfg)
     np.savez(out_dir / "residual_train_dataset.npz", **raw)
 
-    x, u, r = build_residual_dataset(raw, nominal, dt)
-    edmd = fit_residual_edmd(x, u, r, edmd_cfg)
-    save_residual_model(out_dir / "residual_edmd_model.npz", edmd, edmd_cfg)
+    x, u, r, x_next = build_residual_dataset(raw, nominal, dt)
+    hybrid = fit_hybrid_koopman(x, u, x_next, r, edmd_cfg)
+    save_hybrid_koopman(out_dir / "hybrid_koopman_model.npz", hybrid, edmd_cfg)
+    # 兼容旧路径名, 便于 --skip_train --model_dir
+    save_hybrid_koopman(out_dir / "residual_edmd_model.npz", hybrid, edmd_cfg)
 
     meta = {
         "xml": xml,
         "dt": dt,
+        "model_type": "hybrid_koopman_rollout",
+        "prediction_protocol": "psi_{k+1}=A psi_k+B u_k; x_{k+1}=f_nom+C psi_{k+1}",
         "pd_cfg": {
             "traj_count": pd_cfg.traj_count,
             "steps": pd_cfg.steps,
@@ -694,32 +905,23 @@ def train_residual_edmd_end2end(
         },
         "train_stats": {
             "mean_residual_l2": float(np.linalg.norm(r, axis=1).mean()),
-            "feature_dim": int(edmd.feature_dim),
-            "cond_number": float(edmd.cond_number),
+            "psi_dim": int(hybrid.psi_dim),
+            "cond_number": float(hybrid.cond_number),
         },
     }
     with open(out_dir / "residual_train_info.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
-    return edmd
+    return hybrid
 
 
 def _clip_tau(u: np.ndarray, tau_max: float) -> np.ndarray:
-    return np.clip(np.asarray(u, dtype=np.float64), -tau_max, tau_max)
+    """MPC 关节等效力矩限幅 (已关闭)."""
+    # return np.clip(np.asarray(u, dtype=np.float64), -tau_max, tau_max)
+    return np.asarray(u, dtype=np.float64)
 
 
 def predict_next_nominal(nominal: CdsmRigidNominalModel, x: np.ndarray, u: np.ndarray, dt: float) -> np.ndarray:
     return nominal.step(x, u, dt=dt, apply_joint_limits=True)
-
-
-def predict_next_hybrid(
-    nominal: CdsmRigidNominalModel,
-    edmd: ResidualEdmdModel,
-    x: np.ndarray,
-    u: np.ndarray,
-    dt: float,
-) -> np.ndarray:
-    x_nom = predict_next_nominal(nominal, x, u, dt)
-    return x_nom + edmd.predict_residual(x, u)
 
 
 def rollout_predict(
@@ -728,18 +930,21 @@ def rollout_predict(
     *,
     dt: float,
     nominal: CdsmRigidNominalModel,
-    edmd: Optional[ResidualEdmdModel],
+    hybrid: Optional[HybridKoopmanModel] = None,
 ) -> np.ndarray:
+    """
+    Nominal: 逐步 f_nom(x,u).
+    Hybrid:  Koopman 多步滚动 rollout_hybrid (psi 空间开环递推).
+    """
+    if hybrid is not None:
+        return hybrid.rollout_hybrid(nominal, x0, u_seq, dt)
+
     u_seq = np.asarray(u_seq, dtype=np.float64)
     X = np.zeros((u_seq.shape[0] + 1, 4), dtype=np.float64)
-    X[0] = np.asarray(x0, dtype=np.float64).reshape(4)
-    x = X[0].copy()
-    for k in range(u_seq.shape[0]):
-        u = u_seq[k]
-        if edmd is None:
-            x = predict_next_nominal(nominal, x, u, dt)
-        else:
-            x = predict_next_hybrid(nominal, edmd, x, u, dt)
+    x = np.asarray(x0, dtype=np.float64).reshape(4)
+    X[0] = x
+    for k, u in enumerate(u_seq):
+        x = predict_next_nominal(nominal, x, u, dt)
         X[k + 1] = x
     return X
 
@@ -752,14 +957,16 @@ def solve_mpc(
     *,
     dt: float,
     nominal: CdsmRigidNominalModel,
-    edmd: Optional[ResidualEdmdModel],
+    hybrid: Optional[HybridKoopmanModel],
     u_init: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, Dict[str, float]]:
     """
     Direct shooting NMPC:
       decision var: U = [u0..u_{N-1}] in R^{N x 2}
+      Hybrid 预测: Koopman psi 多步开环滚动 (rollout_hybrid)
+      Nominal 预测: 逐步 f_nom
       cost: sum_k (q-qref)^T Q (q-qref) + (dq-dqref)^T Qd (dq-dqref) + u^T R u + (du)^T Rd (du)
-      bounds: |tau| <= tau_max
+      (关节等效力矩限幅 |tau|<=tau_max 已关闭)
     """
     N = int(cfg.horizon)
     q_ref = ref_slice["q_ref"][: N + 1]
@@ -770,7 +977,8 @@ def solve_mpc(
         u0 = np.tile(u_prev[None, :], (N, 1))
     else:
         u0 = np.asarray(u_init, dtype=np.float64).reshape(N, 2)
-    u0 = _clip_tau(u0, cfg.tau_max)
+    # u0 = _clip_tau(u0, cfg.tau_max)  # MPC 力矩限幅 (已关闭)
+    u0 = np.asarray(u0, dtype=np.float64)
 
     Q = np.diag([cfg.Qq, cfg.Qq, cfg.Qdq, cfg.Qdq]).astype(np.float64)
 
@@ -778,8 +986,9 @@ def solve_mpc(
         return U_flat.reshape(N, 2)
 
     def obj(U_flat: np.ndarray) -> float:
-        U = _clip_tau(unpack(U_flat), cfg.tau_max)
-        X = rollout_predict(x0, U, dt=dt, nominal=nominal, edmd=edmd)
+        # U = _clip_tau(unpack(U_flat), cfg.tau_max)
+        U = unpack(U_flat)
+        X = rollout_predict(x0, U, dt=dt, nominal=nominal, hybrid=hybrid)
         cost = 0.0
         for k in range(N + 1):
             xk = X[k]
@@ -792,17 +1001,18 @@ def solve_mpc(
                 cost += cfg.Rd * float(du @ du)
         return cost
 
-    bounds = [(-cfg.tau_max, cfg.tau_max)] * (N * 2)
+    # bounds = [(-cfg.tau_max, cfg.tau_max)] * (N * 2)  # MPC 力矩限幅 (已关闭)
     t0 = time.perf_counter()
     res = minimize(
         obj,
         x0=u0.reshape(-1),
         method="L-BFGS-B",
-        bounds=bounds,
+        bounds=None,
         options={"maxiter": int(cfg.maxiter), "ftol": 1e-6},
     )
     solve_ms = 1000.0 * (time.perf_counter() - t0)
-    U_opt = _clip_tau(unpack(res.x), cfg.tau_max)
+    # U_opt = _clip_tau(unpack(res.x), cfg.tau_max)
+    U_opt = unpack(res.x)
     info = {
         "success": float(1.0 if res.success else 0.0),
         "status": float(res.status),
@@ -820,7 +1030,7 @@ def run_mpc_on_mujoco(
     *,
     label: str,
     nominal: CdsmRigidNominalModel,
-    edmd: Optional[ResidualEdmdModel],
+    hybrid: Optional[HybridKoopmanModel],
     mpc_cfg: MpcConfig,
     xml: str,
     dt: float,
@@ -873,11 +1083,11 @@ def run_mpc_on_mujoco(
             mpc_cfg,
             dt=dt,
             nominal=nominal,
-            edmd=edmd,
+            hybrid=hybrid,
             u_init=u_warm,
         )
         u_cmd = U_opt[0]
-        u_cmd = _clip_tau(u_cmd, mpc_cfg.tau_max)
+        # u_cmd = _clip_tau(u_cmd, mpc_cfg.tau_max)  # MPC 力矩限幅 (已关闭)
 
         # apply to MuJoCo via cable map
         J = compute_tendon_jacobian_fd(model, scratch, data.qpos.copy(), indices["tendon_ids"])
@@ -919,14 +1129,14 @@ def run_mpc_on_nominal_plant(
     *,
     label: str,
     nominal: CdsmRigidNominalModel,
-    edmd: Optional[ResidualEdmdModel],
+    hybrid: Optional[HybridKoopmanModel],
     mpc_cfg: MpcConfig,
     dt: float,
     ref: Dict[str, np.ndarray],
 ) -> Dict[str, np.ndarray]:
     """
     纯名义动力学作为被控对象（无 MuJoCo 依赖），用于在没有 mujoco 包时先完成对比。
-    被控对象始终使用名义 step；控制器的预测模型由 edmd=None/edmd 决定。
+    被控对象始终使用名义 step；控制器的预测模型由 hybrid=None/hybrid 决定。
     """
     n_step = len(ref["t"]) - 1
     x = np.array([ref["q_ref"][0, 0], ref["q_ref"][0, 1], ref["dq_ref"][0, 0], ref["dq_ref"][0, 1]], dtype=np.float64)
@@ -955,10 +1165,11 @@ def run_mpc_on_nominal_plant(
             mpc_cfg,
             dt=dt,
             nominal=nominal,
-            edmd=edmd,
+            hybrid=hybrid,
             u_init=u_warm,
         )
-        u_cmd = _clip_tau(U_opt[0], mpc_cfg.tau_max)
+        u_cmd = U_opt[0]
+        # u_cmd = _clip_tau(u_cmd, mpc_cfg.tau_max)  # MPC 力矩限幅 (已关闭)
 
         # plant update uses nominal dynamics (no residual)
         x = predict_next_nominal(nominal, x, u_cmd, dt)
@@ -1020,7 +1231,7 @@ def plot_compare(log_nom: Dict[str, np.ndarray], log_hyb: Optional[Dict[str, np.
         ax.grid(True, alpha=0.3)
         if i == 0:
             ax.legend(fontsize=8)
-    fig.suptitle("Joint-space tracking: Nominal-MPC vs Hybrid-MPC (MuJoCo plant)")
+    fig.suptitle("Joint-space tracking: Nominal-MPC vs Hybrid-Koopman-rollout-MPC (MuJoCo plant)")
     fig.tight_layout()
     save_figure("mpc_tracking_compare_states")
     plt.close(fig)
@@ -1065,9 +1276,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Joint-space NMPC tracking on MuJoCo cable plant (nominal vs hybrid predictor).")
     p.add_argument("--xml", default=XML_DEFAULT)
     p.add_argument("--plant", choices=["mujoco", "nominal"], default="mujoco", help="Plant for closed-loop test.")
-    p.add_argument("--skip_train", action="store_true", help="Skip EDMD training; load from --model_dir.")
-    p.add_argument("--only_train", action="store_true", help="Only train residual EDMD; do not run MPC compare.")
-    p.add_argument("--model_dir", type=str, default=None, help="Directory containing residual_edmd_model.npz")
+    p.add_argument("--skip_train", action="store_true", help="Skip Koopman training; load from --model_dir.")
+    p.add_argument("--only_train", action="store_true", help="Only train hybrid Koopman; do not run MPC compare.")
+    p.add_argument("--model_dir", type=str, default=None, help="Directory containing hybrid_koopman_model.npz")
     p.add_argument("--only_nominal", action="store_true", help="Run only nominal MPC (ignore hybrid).")
 
     p.add_argument("--dt", type=float, default=0.01)
@@ -1081,7 +1292,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # MPC hyperparameters
     p.add_argument("--horizon", type=int, default=20)
-    p.add_argument("--tau_max", type=float, default=45.0)
+    # p.add_argument("--tau_max", type=float, default=45.0)  # MPC 力矩限幅 (已关闭)
     p.add_argument("--Qq", type=float, default=40.0)
     p.add_argument("--Qdq", type=float, default=2.0)
     p.add_argument("--R", type=float, default=0.02)
@@ -1091,17 +1302,17 @@ def build_parser() -> argparse.ArgumentParser:
     # training hyperparameters (PD collect + EDMD)
     p.add_argument("--train_traj", type=int, default=120)
     p.add_argument("--train_steps", type=int, default=250)
-    p.add_argument("--q_init_range", type=float, default=0.3)
-    p.add_argument("--dq_init_range", type=float, default=0.2)
-    p.add_argument("--amp_min", type=float, default=0.25)
-    p.add_argument("--amp_max", type=float, default=0.65)
+    p.add_argument("--q_init_range", type=float, default=1.5, help="PD采数初始关节角范围 (rad), 默认 ±1.5")
+    p.add_argument("--dq_init_range", type=float, default=0.5)
+    p.add_argument("--amp_min", type=float, default=0.4, help="正弦参考幅值下限 (rad)")
+    p.add_argument("--amp_max", type=float, default=1.5, help="正弦参考幅值上限 (rad), 覆盖 ±1.5")
     p.add_argument("--omega_min", type=float, default=0.4)
     p.add_argument("--omega_max", type=float, default=1.2)
     p.add_argument("--kp_a", type=float, default=120.0)
     p.add_argument("--kp_b", type=float, default=80.0)
     p.add_argument("--kd_a", type=float, default=25.0)
     p.add_argument("--kd_b", type=float, default=18.0)
-    p.add_argument("--tau_max_train", type=float, default=45.0)
+    # p.add_argument("--tau_max_train", type=float, default=45.0)  # PD 采数力矩限幅 (已关闭)
     p.add_argument("--dictionary", choices=["hermite", "rbf"], default="hermite")
     p.add_argument("--ridge", type=float, default=1e-6)
     p.add_argument("--rbf_centers", type=int, default=200)
@@ -1117,14 +1328,15 @@ def main() -> None:
     t0 = time.time()
 
     nominal = make_nominal_model(dt=args.dt)
-    edmd: Optional[ResidualEdmdModel] = None
 
-    # ---- Step 1: train/load residual EDMD ----
+    hybrid_model: Optional[HybridKoopmanModel] = None
+
+    # ---- Step 1: train/load hybrid Koopman ----
     if not args.only_nominal:
         if args.skip_train:
             if not args.model_dir:
                 raise ValueError("--skip_train requires --model_dir")
-            edmd = load_residual_model(Path(args.model_dir))
+            hybrid_model = load_hybrid_koopman(Path(args.model_dir))
         else:
             if args.plant != "mujoco":
                 raise ValueError("Training requires MuJoCo plant. Use --plant mujoco or pass --skip_train with --model_dir.")
@@ -1139,7 +1351,7 @@ def main() -> None:
                 omega_range=(args.omega_min, args.omega_max),
                 kp=(args.kp_a, args.kp_b),
                 kd=(args.kd_a, args.kd_b),
-                tau_max=args.tau_max_train,
+                tau_max=0.0,  # 占位; PD 采数力矩限幅已关闭
             )
             edmd_cfg = ResidualEdmdConfig(
                 dictionary=args.dictionary,
@@ -1148,8 +1360,8 @@ def main() -> None:
                 rbf_sigma=args.rbf_sigma,
                 rbf_seed=args.rbf_seed,
             )
-            print("[train] Collecting PD data and fitting residual EDMD...")
-            edmd = train_residual_edmd_end2end(
+            print("[train] Collecting PD data and fitting hybrid Koopman (multi-step rollout)...")
+            hybrid_model = train_residual_edmd_end2end(
                 xml=args.xml,
                 dt=args.dt,
                 nominal=nominal,
@@ -1174,7 +1386,7 @@ def main() -> None:
 
     mpc_cfg = MpcConfig(
         horizon=args.horizon,
-        tau_max=args.tau_max,
+        tau_max=0.0,  # 占位; MPC 力矩限幅已关闭
         Qq=args.Qq,
         Qdq=args.Qdq,
         R=args.R,
@@ -1187,7 +1399,7 @@ def main() -> None:
         log_nom = run_mpc_on_mujoco(
             label="nominal_mpc",
             nominal=nominal,
-            edmd=None,
+            hybrid=None,
             mpc_cfg=mpc_cfg,
             xml=args.xml,
             dt=args.dt,
@@ -1198,7 +1410,7 @@ def main() -> None:
         log_nom = run_mpc_on_nominal_plant(
             label="nominal_mpc",
             nominal=nominal,
-            edmd=None,
+            hybrid=None,
             mpc_cfg=mpc_cfg,
             dt=args.dt,
             ref=ref,
@@ -1207,13 +1419,13 @@ def main() -> None:
 
     log_hyb = None
     met_hyb = None
-    if edmd is not None:
-        print("[mpc] Running Hybrid-MPC on MuJoCo plant...")
+    if hybrid_model is not None:
+        print("[mpc] Running Hybrid-Koopman-rollout-MPC on MuJoCo plant...")
         if args.plant == "mujoco":
             log_hyb = run_mpc_on_mujoco(
                 label="hybrid_mpc",
                 nominal=nominal,
-                edmd=edmd,
+                hybrid=hybrid_model,
                 mpc_cfg=mpc_cfg,
                 xml=args.xml,
                 dt=args.dt,
@@ -1224,7 +1436,7 @@ def main() -> None:
             log_hyb = run_mpc_on_nominal_plant(
                 label="hybrid_mpc",
                 nominal=nominal,
-                edmd=edmd,
+                hybrid=hybrid_model,
                 mpc_cfg=mpc_cfg,
                 dt=args.dt,
                 ref=ref,

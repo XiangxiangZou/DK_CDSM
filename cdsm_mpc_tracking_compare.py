@@ -855,7 +855,7 @@ def build_residual_dataset(
 
     xp_nom = np.zeros_like(xp_true)
     for i in range(x.shape[0]):
-        xp_nom[i] = nominal.step(x[i], u[i], dt=dt, apply_joint_limits=True)
+        xp_nom[i] = nominal.step(x[i], u[i], dt=dt, apply_joint_limits=False)
     r = xp_true - xp_nom
     return x, u, r, xp_true
 
@@ -921,7 +921,7 @@ def _clip_tau(u: np.ndarray, tau_max: float) -> np.ndarray:
 
 
 def predict_next_nominal(nominal: CdsmRigidNominalModel, x: np.ndarray, u: np.ndarray, dt: float) -> np.ndarray:
-    return nominal.step(x, u, dt=dt, apply_joint_limits=True)
+    return nominal.step(x, u, dt=dt, apply_joint_limits=False)
 
 
 def rollout_predict(
@@ -977,50 +977,150 @@ def solve_mpc(
         u0 = np.tile(u_prev[None, :], (N, 1))
     else:
         u0 = np.asarray(u_init, dtype=np.float64).reshape(N, 2)
-    # u0 = _clip_tau(u0, cfg.tau_max)  # MPC 力矩限幅 (已关闭)
     u0 = np.asarray(u0, dtype=np.float64)
 
-    Q = np.diag([cfg.Qq, cfg.Qq, cfg.Qdq, cfg.Qdq]).astype(np.float64)
+    Q_diag = np.array([cfg.Qq, cfg.Qq, cfg.Qdq, cfg.Qdq], dtype=np.float64)
+    R_diag = np.array([cfg.R, cfg.R], dtype=np.float64)
+    Rd_diag = np.array([cfg.Rd, cfg.Rd], dtype=np.float64)
+    
+    Q_bar = np.diag(np.tile(Q_diag, N))
+    R_bar = np.diag(np.tile(R_diag, N))
+    Rd_bar = np.diag(np.tile(Rd_diag, N))
+    
+    D = np.zeros((2*N, 2*N), dtype=np.float64)
+    for i in range(N):
+        D[2*i:2*i+2, 2*i:2*i+2] = np.eye(2)
+        if i > 0:
+            D[2*i:2*i+2, 2*i-2:2*i] = -np.eye(2)
+            
+    E = np.zeros((2*N, 2), dtype=np.float64)
+    E[0:2, :] = np.eye(2)
 
-    def unpack(U_flat: np.ndarray) -> np.ndarray:
-        return U_flat.reshape(N, 2)
+    X_ref = np.zeros((N, 4), dtype=np.float64)
+    X_ref[:, :2] = q_ref[1:N+1]
+    X_ref[:, 2:] = dq_ref[1:N+1]
+    X_ref_flat = X_ref.flatten()
 
-    def obj(U_flat: np.ndarray) -> float:
-        # U = _clip_tau(unpack(U_flat), cfg.tau_max)
-        U = unpack(U_flat)
-        X = rollout_predict(x0, U, dt=dt, nominal=nominal, hybrid=hybrid)
-        cost = 0.0
-        for k in range(N + 1):
-            xk = X[k]
-            ek = np.array([xk[0] - q_ref[k, 0], xk[1] - q_ref[k, 1], xk[2] - dq_ref[k, 0], xk[3] - dq_ref[k, 1]])
-            cost += float(ek @ Q @ ek)
-            if k < N:
-                uk = U[k]
-                cost += cfg.R * float(uk @ uk)
-                du = uk - (u_prev if k == 0 else U[k - 1])
-                cost += cfg.Rd * float(du @ du)
-        return cost
-
-    # bounds = [(-cfg.tau_max, cfg.tau_max)] * (N * 2)  # MPC 力矩限幅 (已关闭)
+    U_opt = u0.flatten()
     t0 = time.perf_counter()
-    res = minimize(
-        obj,
-        x0=u0.reshape(-1),
-        method="L-BFGS-B",
-        bounds=None,
-        options={"maxiter": int(cfg.maxiter), "ftol": 1e-6},
-    )
+    
+    iters = 0
+    eps_fd = 1e-5
+    for it in range(int(cfg.maxiter)):
+        iters += 1
+        X_base_mat = rollout_predict(x0, U_opt.reshape(N, 2), dt=dt, nominal=nominal, hybrid=hybrid)
+        X_base = X_base_mat[1:].flatten()
+        X_err = X_base - X_ref_flat
+        
+        M = np.zeros((4*N, 2*N), dtype=np.float64)
+        for i in range(2*N):
+            U_pert = U_opt.copy()
+            U_pert[i] += eps_fd
+            X_pert = rollout_predict(x0, U_pert.reshape(N, 2), dt=dt, nominal=nominal, hybrid=hybrid)[1:].flatten()
+            M[:, i] = (X_pert - X_base) / eps_fd
+            
+        dU_base = D @ U_opt - E @ u_prev
+        
+        H = 2.0 * (M.T @ Q_bar @ M + R_bar + D.T @ Rd_bar @ D)
+        g = 2.0 * (M.T @ Q_bar @ X_err + R_bar @ U_opt + D.T @ Rd_bar @ dU_base)
+        
+        H += np.eye(2*N) * 1e-6
+        
+        try:
+            dU = np.linalg.solve(H, -g)
+        except np.linalg.LinAlgError:
+            break
+            
+        U_opt += dU
+        
+        if np.max(np.abs(dU)) < 1e-4:
+            break
+
     solve_ms = 1000.0 * (time.perf_counter() - t0)
-    # U_opt = _clip_tau(unpack(res.x), cfg.tau_max)
-    U_opt = unpack(res.x)
+    
+    # Calculate objective value
+    X_final = rollout_predict(x0, U_opt.reshape(N, 2), dt=dt, nominal=nominal, hybrid=hybrid)
+    obj_val = 0.0
+    for k in range(N + 1):
+        xk = X_final[k]
+        ek = np.array([xk[0] - q_ref[k, 0], xk[1] - q_ref[k, 1], xk[2] - dq_ref[k, 0], xk[3] - dq_ref[k, 1]])
+        Q_mat = np.diag(Q_diag)
+        obj_val += float(ek @ Q_mat @ ek)
+        if k < N:
+            uk = U_opt.reshape(N, 2)[k]
+            obj_val += cfg.R * float(uk @ uk)
+            du = uk - (u_prev if k == 0 else U_opt.reshape(N, 2)[k - 1])
+            obj_val += cfg.Rd * float(du @ du)
+
     info = {
-        "success": float(1.0 if res.success else 0.0),
-        "status": float(res.status),
-        "iters": float(res.nit if hasattr(res, "nit") else 0.0),
+        "success": 1.0,
+        "status": 0.0,
+        "iters": float(iters),
         "solve_ms": float(solve_ms),
-        "obj": float(res.fun),
+        "obj": float(obj_val),
     }
-    return U_opt, info
+    return U_opt.reshape(N, 2), info
+
+
+class MpcProgressReporter:
+    """Console progress for closed-loop MPC (step index, ETA, tracking error)."""
+
+    def __init__(
+        self,
+        label: str,
+        n_step: int,
+        *,
+        plant: str,
+        dt: float,
+        horizon: int,
+        maxiter: int,
+        report_every: Optional[int] = None,
+    ) -> None:
+        self.label = label
+        self.n_step = int(n_step)
+        self.plant = plant
+        self.dt = float(dt)
+        self.horizon = int(horizon)
+        self.maxiter = int(maxiter)
+        self.report_every = report_every or max(1, self.n_step // 10)
+        self._t0 = time.perf_counter()
+
+    def start(self) -> None:
+        sim_time = self.n_step * self.dt
+        print(
+            f"[mpc:{self.label}] start | plant={self.plant} | steps={self.n_step} | "
+            f"dt={self.dt:g}s | T_sim≈{sim_time:.3g}s | horizon={self.horizon} | maxiter={self.maxiter}",
+            flush=True,
+        )
+
+    def update(
+        self,
+        k: int,
+        *,
+        solve_ms: float,
+        q_err_norm: float,
+        sim_time: float,
+    ) -> None:
+        step = k + 1
+        if step != 1 and step % self.report_every != 0 and step != self.n_step:
+            return
+        elapsed = time.perf_counter() - self._t0
+        pct = 100.0 * step / self.n_step
+        eta = elapsed / step * (self.n_step - step) if step < self.n_step else 0.0
+        print(
+            f"[mpc:{self.label}] step {step}/{self.n_step} ({pct:5.1f}%) | "
+            f"sim_t={sim_time:.3f}s | solve={solve_ms:.1f}ms | "
+            f"|e_q|={q_err_norm:.4f} rad | elapsed={elapsed:.1f}s | eta={eta:.1f}s",
+            flush=True,
+        )
+
+    def finish(self) -> None:
+        elapsed = time.perf_counter() - self._t0
+        print(
+            f"[mpc:{self.label}] done | {self.n_step} steps in {elapsed:.2f}s "
+            f"(avg {1e3 * elapsed / max(self.n_step, 1):.1f} ms/step)",
+            flush=True,
+        )
 
 
 # -----------------------------
@@ -1062,6 +1162,16 @@ def run_mpc_on_mujoco(
 
     rng = np.random.RandomState(seed)
     _ = rng  # placeholder (keep seed deterministic if later add noise)
+
+    progress = MpcProgressReporter(
+        label,
+        n_step,
+        plant="mujoco",
+        dt=dt,
+        horizon=mpc_cfg.horizon,
+        maxiter=mpc_cfg.maxiter,
+    )
+    progress.start()
 
     for k in range(n_step):
         x_meas = get_active_state(data, indices)
@@ -1111,6 +1221,11 @@ def run_mpc_on_mujoco(
         rec_solve_ms.append(info["solve_ms"])
         rec_obj.append(info["obj"])
 
+        q_err = float(np.linalg.norm(x_meas[:2] - ref["q_ref"][k]))
+        progress.update(k, solve_ms=info["solve_ms"], q_err_norm=q_err, sim_time=float(data.time))
+
+    progress.finish()
+
     log = {
         "label": np.array([label]),
         "t": np.array(rec_t),
@@ -1146,6 +1261,16 @@ def run_mpc_on_nominal_plant(
     rec_t, rec_x, rec_u, rec_ok = [], [], [], []
     rec_q_ref, rec_dq_ref = [], []
     rec_solve_ms, rec_obj = [], []
+
+    progress = MpcProgressReporter(
+        label,
+        n_step,
+        plant="nominal",
+        dt=dt,
+        horizon=mpc_cfg.horizon,
+        maxiter=mpc_cfg.maxiter,
+    )
+    progress.start()
 
     for k in range(n_step):
         # horizon reference slice
@@ -1185,6 +1310,11 @@ def run_mpc_on_nominal_plant(
         rec_dq_ref.append(ref["dq_ref"][k].copy())
         rec_solve_ms.append(info["solve_ms"])
         rec_obj.append(info["obj"])
+
+        q_err = float(np.linalg.norm(x[:2] - ref["q_ref"][k]))
+        progress.update(k, solve_ms=info["solve_ms"], q_err_norm=q_err, sim_time=(k + 1) * dt)
+
+    progress.finish()
 
     return {
         "label": np.array([label]),
@@ -1274,49 +1404,93 @@ def plot_compare(log_nom: Dict[str, np.ndarray], log_hyb: Optional[Dict[str, np.
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Joint-space NMPC tracking on MuJoCo cable plant (nominal vs hybrid predictor).")
+
+    # ------------------------------------------------------------------
+    # 模型与运行模式
+    # ------------------------------------------------------------------
+    # MuJoCo 绳驱机器人 XML 路径；默认 multi_joint_cable_dirven_space_robot.xml
     p.add_argument("--xml", default=XML_DEFAULT)
+    # 闭环被控对象: mujoco=真实绳驱仿真; nominal=纯名义刚体(无 MuJoCo, 用于调试 MPC)
     p.add_argument("--plant", choices=["mujoco", "nominal"], default="mujoco", help="Plant for closed-loop test.")
+    # 跳过 Koopman 训练，从 --model_dir 加载已训 hybrid_koopman_model.npz
     p.add_argument("--skip_train", action="store_true", help="Skip Koopman training; load from --model_dir.")
+    # 仅训练混合 Koopman 模型，不跑 MPC 对比
     p.add_argument("--only_train", action="store_true", help="Only train hybrid Koopman; do not run MPC compare.")
+    # 已训模型目录(含 hybrid_koopman_model.npz)；与 --skip_train 配合使用
     p.add_argument("--model_dir", type=str, default=None, help="Directory containing hybrid_koopman_model.npz")
+    # 只跑名义 MPC，不训练/不加载混合预测器
     p.add_argument("--only_nominal", action="store_true", help="Run only nominal MPC (ignore hybrid).")
 
-    p.add_argument("--dt", type=float, default=0.01)
-    p.add_argument("--seed", type=int, default=7)
-    p.add_argument("--T_track", type=float, default=6.0)
+    # ------------------------------------------------------------------
+    # 仿真时间与参考轨迹 (关节空间余弦斜坡)
+    # ------------------------------------------------------------------
+    # 控制/积分步长 (s)；须与名义模型 dt、训练数据 dt 一致，常用 0.01 或 0.02
+    p.add_argument("--dt", type=float, default=0.02)
+    # 随机种子：影响 PD 采数、RBF 中心初始化等
+    p.add_argument("--seed", type=int, default=10)
+    # 跟踪总时长 (s)；MPC 步数 ≈ T_track / dt
+    p.add_argument("--T_track", type=float, default=5.0)
+    # 参考轨迹斜坡时长 (s)；qa/qb 在 [0,T_ramp] 内从初值平滑过渡到终值，之后保持
     p.add_argument("--T_ramp", type=float, default=5.0)
-    p.add_argument("--qa0", type=float, default=-0.5)
-    p.add_argument("--qa1", type=float, default=0.5)
+    # 关节 qa (joint1=joint2) 参考初值 / 终值 (rad)，范围建议不超过 ±π/2
+    p.add_argument("--qa0", type=float, default=-1.5)
+    p.add_argument("--qa1", type=float, default=1.5)
+    # 关节 qb (joint3=joint4) 参考初值 / 终值 (rad)
     p.add_argument("--qb0", type=float, default=0.4)
     p.add_argument("--qb1", type=float, default=-0.4)
 
-    # MPC hyperparameters
-    p.add_argument("--horizon", type=int, default=20)
-    # p.add_argument("--tau_max", type=float, default=45.0)  # MPC 力矩限幅 (已关闭)
-    p.add_argument("--Qq", type=float, default=40.0)
-    p.add_argument("--Qdq", type=float, default=2.0)
-    p.add_argument("--R", type=float, default=0.02)
-    p.add_argument("--Rd", type=float, default=0.2)
-    p.add_argument("--maxiter", type=int, default=80)
+    # ------------------------------------------------------------------
+    # NMPC 求解器超参数 (direct shooting, 决策变量为整段控制力矩序列)
+    # 代价: Σ_k (q-q_ref)^T diag(Qq,Qq,Qdq,Qdq)(q-q_ref) + u^T R u + Δu^T Rd Δu
+    # ------------------------------------------------------------------
+    # 预测时域步数 N；预测窗长度 = horizon * dt，越大越能看远但求解更慢
+    p.add_argument("--horizon", type=int, default=25)
+    # 关节等效力矩限幅 |tau|<=tau_max (Nm)；当前代码中已注释关闭，恢复需改 solve_mpc / run_mpc
+    # p.add_argument("--tau_max", type=float, default=45.0)
+    # 位置跟踪权重 Qq (对 qa、qb 各一份)；增大→更贴参考，过大易振荡/饱和
+    p.add_argument("--Qq", type=float, default=440.0)
+    # 速度跟踪权重 Qdq (对 dqa、dqb)；增大→抑制速度偏差与滞后
+    p.add_argument("--Qdq", type=float, default=1.0)
+    # 控制能量权重 R (对 tau_a、tau_b)；增大→力矩更保守、跟踪可能变慢
+    p.add_argument("--R", type=float, default=0.000001)
+    # 控制增量权重 Rd (惩罚 Δu)；增大→力矩更平滑，绳驱映射对突变更敏感时可适当加大
+    p.add_argument("--Rd", type=float, default=0)
+    # 每步 NMPC 内部梯度下降迭代次数；过小可能未收敛，过大增加单步耗时
+    p.add_argument("--maxiter", type=int, default=20)
 
-    # training hyperparameters (PD collect + EDMD)
-    p.add_argument("--train_traj", type=int, default=120)
-    p.add_argument("--train_steps", type=int, default=250)
+    # ------------------------------------------------------------------
+    # 混合 Koopman 训练：PD 采数 + EDMD/RBF 拟合 (仅非 --only_nominal 且非 --skip_train 时)
+    # ------------------------------------------------------------------
+    # 训练轨迹条数；越多泛化越好，采集与拟合时间线性增加
+    p.add_argument("--train_traj", type=int, default=10)
+    # 每条轨迹仿真步数 (不含初始时刻)
+    p.add_argument("--train_steps", type=int, default=40)
+    # PD 采数时初始关节角随机范围 ±q_init_range (rad)
     p.add_argument("--q_init_range", type=float, default=1.5, help="PD采数初始关节角范围 (rad), 默认 ±1.5")
-    p.add_argument("--dq_init_range", type=float, default=0.5)
-    p.add_argument("--amp_min", type=float, default=0.4, help="正弦参考幅值下限 (rad)")
+    # PD 采数时初始关节角速度随机范围 ±dq_init_range (rad/s)
+    p.add_argument("--dq_init_range", type=float, default=1.0)
+    # 正弦参考轨迹幅值随机下限 / 上限 (rad)；应覆盖你关心的工作空间
+    p.add_argument("--amp_min", type=float, default=-1.5, help="正弦参考幅值下限 (rad)")
     p.add_argument("--amp_max", type=float, default=1.5, help="正弦参考幅值上限 (rad), 覆盖 ±1.5")
+    # 正弦参考角频率随机范围 (rad/s)
     p.add_argument("--omega_min", type=float, default=0.4)
     p.add_argument("--omega_max", type=float, default=1.2)
+    # PD 增益：关节 a (第一级 spreader) / 关节 b (第二级)；用于生成训练数据中的 tau
     p.add_argument("--kp_a", type=float, default=120.0)
     p.add_argument("--kp_b", type=float, default=80.0)
     p.add_argument("--kd_a", type=float, default=25.0)
     p.add_argument("--kd_b", type=float, default=18.0)
-    # p.add_argument("--tau_max_train", type=float, default=45.0)  # PD 采数力矩限幅 (已关闭)
+    # PD 采数时关节力矩限幅 (Nm)；当前已关闭，占位见 main 中 tau_max=0.0
+    # p.add_argument("--tau_max_train", type=float, default=45.0)
+    # 残差字典: hermite=多项式特征; rbf=径向基(需配合 rbf_centers/sigma)
     p.add_argument("--dictionary", choices=["hermite", "rbf"], default="hermite")
+    # 岭回归正则系数；过小易过拟合，过大残差拟合不足
     p.add_argument("--ridge", type=float, default=1e-6)
-    p.add_argument("--rbf_centers", type=int, default=200)
+    # RBF 中心个数 (仅 dictionary=rbf)；越多表达能力越强、矩阵更大
+    p.add_argument("--rbf_centers", type=int, default=40)
+    # RBF 核宽度 σ；None 时由数据自动估计
     p.add_argument("--rbf_sigma", type=float, default=None)
+    # RBF 中心 K-means 初始化随机种子
     p.add_argument("--rbf_seed", type=int, default=2007)
     return p
 
@@ -1394,7 +1568,14 @@ def main() -> None:
         maxiter=args.maxiter,
     )
 
-    print("[mpc] Running Nominal-MPC on MuJoCo plant...")
+    n_mpc_steps = len(ref["t"]) - 1
+    print(
+        f"[mpc] reference ready | T_track={args.T_track:g}s | dt={args.dt:g}s | "
+        f"mpc_steps={n_mpc_steps} | horizon={args.horizon} | maxiter={args.maxiter}",
+        flush=True,
+    )
+
+    print(f"[mpc] (1/2) Running Nominal-MPC on {args.plant} plant...", flush=True)
     if args.plant == "mujoco":
         log_nom = run_mpc_on_mujoco(
             label="nominal_mpc",
@@ -1416,11 +1597,16 @@ def main() -> None:
             ref=ref,
         )
     met_nom = tracking_metrics(log_nom)
+    print(
+        f"[mpc] (1/2) Nominal-MPC finished | RMSE(q)={met_nom['rmse_q']:.6g} rad | "
+        f"mean solve={met_nom['mean_solve_ms']:.2f} ms",
+        flush=True,
+    )
 
     log_hyb = None
     met_hyb = None
     if hybrid_model is not None:
-        print("[mpc] Running Hybrid-Koopman-rollout-MPC on MuJoCo plant...")
+        print(f"[mpc] (2/2) Running Hybrid-Koopman-rollout-MPC on {args.plant} plant...", flush=True)
         if args.plant == "mujoco":
             log_hyb = run_mpc_on_mujoco(
                 label="hybrid_mpc",
@@ -1442,7 +1628,13 @@ def main() -> None:
                 ref=ref,
             )
         met_hyb = tracking_metrics(log_hyb)
+        print(
+            f"[mpc] (2/2) Hybrid-MPC finished | RMSE(q)={met_hyb['rmse_q']:.6g} rad | "
+            f"mean solve={met_hyb['mean_solve_ms']:.2f} ms",
+            flush=True,
+        )
 
+    print("[mpc] saving logs and plots...", flush=True)
     np.savez(out_dir / "mpc_nominal_log.npz", **log_nom)
     if log_hyb is not None:
         np.savez(out_dir / "mpc_hybrid_log.npz", **log_hyb)

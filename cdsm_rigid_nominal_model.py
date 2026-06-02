@@ -26,7 +26,8 @@ cdsm_rigid_nominal_model.py
 | joint3 @ link4   | q_b, 绝对角 theta_4 = 2*q_a + q_b        |
 | joint4 @ link5   | 与 joint3 同步 -> theta_5 = 2*q_a + 2*q_b|
 | L2=L4=0.2, L3=L5=2.0 | 连杆长度                             |
-| m2=m4=1.161, m3=m5=2.866 | 可动段质量 (link1 固定不计)      |
+| m2=m4=1.161, m3=m5=2.866 | MuJoCo 可动段质量 (link1 固定不计) |
+| 名义模型取 0.95 倍       | NOMINAL_MASS_SCALE = 0.95        |
 | gravity=0        | 空间失重, 无重力项                       |
 | joint range ±pi/2| 可选硬限位                               |
 | timestep=0.01    | 默认积分步长                             |
@@ -64,10 +65,15 @@ XML_MODEL_NAME = "multi_joint_space_robot"
 XML_TIMESTEP = 0.01
 XML_JOINT_RANGE = (-np.pi / 2.0, np.pi / 2.0)  # range="-1.5708 1.5708"
 
+# MuJoCo multi_joint_cable_dirven_space_robot.xml 可动连杆质量 [kg]
+XML_MASS_M2_M4 = 1.161  # link2 / link4 (inertial)
+XML_MASS_M3_M5 = 2.866  # link3 / link5 (geom mass)
+NOMINAL_MASS_SCALE = 0.95  # 名义模型质量 = MuJoCo 质量 × 该系数
+
 
 @dataclass(frozen=True)
 class CdsmNominalParams:
-    """名义模型参数 (直接对应 XML 注释与 body/geom 定义)."""
+    """名义模型参数 (几何对齐 XML; 质量为 MuJoCo 值的 NOMINAL_MASS_SCALE 倍)."""
 
     # 连杆长度 [m]
     L1: float = 2.0   # link1 固定基座
@@ -80,11 +86,11 @@ class CdsmNominalParams:
     Ls1: float = 0.6
     Ls2: float = 0.6
 
-    # 可动连杆质量 [kg] (link1 固定, 不计入 M(q))
-    m2: float = 1.161
-    m3: float = 2.866
-    m4: float = 1.161
-    m5: float = 2.866
+    # 可动连杆质量 [kg] (link1 固定, 不计入 M(q)); 0.95 × MuJoCo
+    m2: float = XML_MASS_M2_M4 * NOMINAL_MASS_SCALE
+    m3: float = XML_MASS_M3_M5 * NOMINAL_MASS_SCALE
+    m4: float = XML_MASS_M2_M4 * NOMINAL_MASS_SCALE
+    m5: float = XML_MASS_M3_M5 * NOMINAL_MASS_SCALE
 
     # 质心沿杆长比例 (细杆近似: 中点)
     # link2/4 的 MuJoCo inertial 在 pos="0.1 0 0" -> 相对杆长 0.5

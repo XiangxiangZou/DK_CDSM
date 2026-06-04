@@ -946,7 +946,7 @@ def main() -> None:
         out_dir / "training_history.csv",
         np.asarray(history, dtype=np.float64),
         delimiter=",",
-        header="epoch,train_total,train_pred,train_linear,val_total,val_pred,val_linear",
+        header="epoch,train_total,train_pred,train_linear,val_full_total,val_full_pred,val_full_linear",
         comments="",
     )
     dk_pred = DeepKoopmanPredictor(KoopmanRuntime(dk_model, x_normer, u_normer, device))

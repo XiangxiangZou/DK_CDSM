@@ -205,7 +205,7 @@ def train_dkac(
         identity_control_bias=cfg.identity_control_bias,
     ).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    best_val = float("inf")
+    best_val_full = float("inf")
     best_path = out_dir / "best_dkac.pt"
     history: List[List[float]] = []
     val_x = torch.from_numpy(Xw_val.astype(np.float32)).to(device)
@@ -230,6 +230,9 @@ def train_dkac(
             val_total, val_state, val_embed = compute_dkac_losses(
                 model, val_x[:, : h + 1], val_u[:, :h], cfg.w_state, cfg.w_embed
             )
+            val_full_total, val_full_state, val_full_embed = compute_dkac_losses(
+                model, val_x, val_u, cfg.w_state, cfg.w_embed
+            )
         train_mean = np.mean(np.asarray(losses, dtype=np.float64), axis=0)
         row = [
             float(epoch),
@@ -240,15 +243,18 @@ def train_dkac(
             float(val_state.cpu()),
             float(val_embed.cpu()),
             float(h),
+            float(val_full_total.cpu()),
+            float(val_full_state.cpu()),
+            float(val_full_embed.cpu()),
         ]
         history.append(row)
-        if row[4] < best_val:
-            best_val = row[4]
+        if row[8] < best_val_full:
+            best_val_full = row[8]
             torch.save(model.state_dict(), best_path)
         if epoch == 1 or epoch == cfg.epochs or epoch % max(1, cfg.epochs // 10) == 0:
             print(
                 f"[dkac] epoch {epoch:03d}/{cfg.epochs:03d} H={h:02d} "
-                f"train={row[1]:.3e} val={row[4]:.3e}",
+                f"train={row[1]:.3e} valH={row[4]:.3e} valFull={row[8]:.3e}",
                 flush=True,
             )
 
@@ -261,10 +267,18 @@ def train_dkac(
         out_dir / "dkac_training_history.csv",
         np.asarray(history, dtype=np.float64),
         delimiter=",",
-        header="epoch,train_total,train_state,train_embed,val_total,val_state,val_embed,horizon",
+        header=(
+            "epoch,train_total,train_state,train_embed,"
+            "val_curriculum_total,val_curriculum_state,val_curriculum_embed,horizon,"
+            "val_full_total,val_full_state,val_full_embed"
+        ),
         comments="",
     )
-    return model, history, {"best_val": best_val, "best_path": str(best_path)}
+    return model, history, {
+        "best_val_full": best_val_full,
+        "best_path": str(best_path),
+        "best_selection": "fixed full-window validation loss",
+    }
 
 
 class DKACRuntime:
@@ -302,6 +316,17 @@ class DKACRuntime:
         G = self.control_matrix(x_phys)
         return np.linalg.pinv(G, rcond=1e-6) @ np.asarray(v, dtype=np.float64).reshape(-1)
 
+    def step_latent(self, z: np.ndarray, u_phys: np.ndarray) -> np.ndarray:
+        x_norm = np.asarray(z, dtype=np.float64).reshape(-1)[:STATE_DIM]
+        x_phys = self.x_normer.inverse(x_norm.reshape(1, -1))[0]
+        u_norm = self.u_normer.transform(np.asarray(u_phys, dtype=np.float64).reshape(1, -1))[0]
+        v = self.control_matrix(x_phys) @ u_norm
+        return self.A @ z + self.B @ v
+
+    def recover_state(self, z: np.ndarray) -> np.ndarray:
+        x_norm = np.asarray(z, dtype=np.float64).reshape(-1)[:STATE_DIM]
+        return self.x_normer.inverse(x_norm.reshape(1, -1))[0]
+
 
 class EdmdRuntime:
     def __init__(self, predictor: EdmdPredictor) -> None:
@@ -320,6 +345,14 @@ class EdmdRuntime:
 
     def recover_u_norm(self, _x_phys: np.ndarray, v: np.ndarray) -> np.ndarray:
         return np.asarray(v, dtype=np.float64).reshape(CONTROL_DIM)
+
+    def step_latent(self, z: np.ndarray, u_phys: np.ndarray) -> np.ndarray:
+        u_norm = self.u_normer.transform(np.asarray(u_phys, dtype=np.float64).reshape(1, -1))[0]
+        return self.A @ z + self.B @ u_norm
+
+    def recover_state(self, z: np.ndarray) -> np.ndarray:
+        x_norm = np.asarray(z, dtype=np.float64).reshape(-1)[:STATE_DIM]
+        return self.x_normer.inverse(x_norm.reshape(1, -1))[0]
 
 
 @dataclass
@@ -512,17 +545,94 @@ def tracking_metrics(log: Dict[str, np.ndarray]) -> Dict[str, object]:
     }
 
 
+def predict_validation_rollouts(runtime: object, val_raw: Dict[str, np.ndarray]) -> Dict[str, object]:
+    """
+    Open-loop model rollout on recorded validation inputs.
+
+    This isolates model accuracy from controller tracking: every predictor starts
+    from the true MuJoCo initial state and then rolls forward using the same
+    recorded PD inputs from the validation dataset.
+    """
+    states = val_raw["states"]
+    inputs = val_raw["inputs"]
+    preds = np.zeros_like(states)
+    for i in range(states.shape[0]):
+        z = runtime.lift(states[i, 0])
+        preds[i, 0] = states[i, 0]
+        for k in range(inputs.shape[1]):
+            z = runtime.step_latent(z, inputs[i, k])
+            preds[i, k + 1] = runtime.recover_state(z)
+    err = preds - states
+    return {
+        "preds": preds,
+        "states_true": states,
+        "rmse_by_state": np.sqrt(np.mean(err[:, 1:, :] * err[:, 1:, :], axis=(0, 1))),
+        "step_rmse": np.sqrt(np.mean(err * err, axis=(0, 2))),
+        "total_rmse": float(np.sqrt(np.mean(err[:, 1:, :] * err[:, 1:, :]))),
+    }
+
+
+def model_prediction_metrics(result: Dict[str, object]) -> Dict[str, object]:
+    return {
+        "total_rmse": float(result["total_rmse"]),
+        "rmse_by_state": np.asarray(result["rmse_by_state"], dtype=np.float64).tolist(),
+        "final_step_rmse": float(np.asarray(result["step_rmse"], dtype=np.float64)[-1]),
+    }
+
+
 def plot_training_history(history: List[List[float]]) -> None:
     arr = np.asarray(history, dtype=np.float64)
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.semilogy(arr[:, 0], arr[:, 1], label="train")
-    ax.semilogy(arr[:, 0], arr[:, 4], label="val")
+    ax.semilogy(arr[:, 0], arr[:, 4], label="val curriculum")
+    if arr.shape[1] > 8:
+        ax.semilogy(arr[:, 0], arr[:, 8], label="val full-window")
     ax.set_xlabel("Epoch")
     ax.set_ylabel("DKAC loss")
     ax.grid(True, alpha=0.3)
     ax.legend()
     fig.tight_layout()
     save_figure("dkac_training_history")
+    plt.close(fig)
+
+
+def plot_model_prediction_error(
+    res_dkac: Dict[str, object],
+    res_edmd: Dict[str, object],
+    dt: float,
+) -> None:
+    t = np.arange(np.asarray(res_dkac["step_rmse"]).shape[0]) * dt
+    step_d = np.asarray(res_dkac["step_rmse"], dtype=np.float64)
+    step_e = np.asarray(res_edmd["step_rmse"], dtype=np.float64)
+    rmse_d = np.asarray(res_dkac["rmse_by_state"], dtype=np.float64)
+    rmse_e = np.asarray(res_edmd["rmse_by_state"], dtype=np.float64)
+    labels = STATE_LABELS + ["overall"]
+    vals_d = np.r_[rmse_d, float(res_dkac["total_rmse"])]
+    vals_e = np.r_[rmse_e, float(res_edmd["total_rmse"])]
+
+    fig, axes = plt.subplots(2, 1, figsize=(11, 8.2))
+    axes[0].plot(t, step_d, lw=1.7, label=f"DKAC model (RMSE={float(res_dkac['total_rmse']):.3g})")
+    axes[0].plot(t, step_e, lw=1.7, label=f"EDMD model (RMSE={float(res_edmd['total_rmse']):.3g})")
+    axes[0].set_xlabel("Time (s)")
+    axes[0].set_ylabel("State RMSE")
+    axes[0].set_title("Open-loop rollout error on validation MuJoCo trajectories")
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend()
+
+    x = np.arange(len(labels))
+    width = 0.36
+    axes[1].bar(x - width / 2, vals_d, width, label="DKAC model")
+    axes[1].bar(x + width / 2, vals_e, width, label="EDMD model")
+    axes[1].set_xticks(x)
+    axes[1].set_xticklabels(labels)
+    axes[1].set_ylabel("RMSE in physical state coordinates")
+    axes[1].set_title("Validation rollout RMSE by state")
+    axes[1].grid(True, axis="y", alpha=0.3)
+    axes[1].legend()
+
+    fig.suptitle("Model prediction error: DKAC vs EDMD vs MuJoCo")
+    fig.tight_layout()
+    save_figure("model_prediction_error_compare")
     plt.close(fig)
 
 
@@ -687,7 +797,7 @@ def main() -> None:
     print(f"device={device}, output={out_dir}")
     print("[policy] torque clipping disabled; cable max-tension clipping disabled")
 
-    print("[1/6] Collecting broad-range PD MuJoCo data...")
+    print("[1/7] Collecting broad-range PD MuJoCo data...")
     model, data, scratch, indices = load_cable_model(args.xml, args.dt)
     pd_train = PDCollectConfig(
         traj_count=args.train_traj,
@@ -707,7 +817,7 @@ def main() -> None:
     val_raw, val_meta = collect_pd_trajectories(model, data, scratch, indices, pd_val)
     print(f"      train={train_raw['states'].shape}, val={val_raw['states'].shape}")
 
-    print("[2/6] Normalizing data...")
+    print("[2/7] Normalizing data...")
     X_train = train_raw["states"].reshape(-1, STATE_DIM)
     U_train = train_raw["inputs"].reshape(-1, CONTROL_DIM)
     x_normer = Normalizer.fit(X_train)
@@ -723,7 +833,7 @@ def main() -> None:
     np.savez_compressed(out_dir / "train_pd_data.npz", **train_raw)
     np.savez_compressed(out_dir / "val_pd_data.npz", **val_raw)
 
-    print("[3/6] Training Shi-Meng DKAC model...")
+    print("[3/7] Training Shi-Meng DKAC model...")
     dkac_cfg = DKACConfig(
         lift_dim=args.lift_dim,
         hidden=tuple(args.hidden),
@@ -747,7 +857,7 @@ def main() -> None:
     dkac_rt = DKACRuntime(dkac_model, x_normer, u_normer, device)
     plot_training_history(history)
 
-    print("[4/6] Fitting Koopman-EDMD baseline...")
+    print("[4/7] Fitting Koopman-EDMD baseline...")
     edmd_cfg = EdmdConfig(
         n_centers=args.edmd_centers,
         rbf_sigma=args.edmd_sigma,
@@ -761,7 +871,21 @@ def main() -> None:
         f"cond(Gram)={edmd_pred.cond_number:.3e}"
     )
 
-    print("[5/6] Running closed-loop Koopman-space LQR tracking on MuJoCo...")
+    print("[5/7] Evaluating open-loop model prediction error...")
+    pred_dkac = predict_validation_rollouts(dkac_rt, val_raw)
+    pred_edmd = predict_validation_rollouts(edmd_rt, val_raw)
+    np.savez_compressed(
+        out_dir / "validation_model_rollouts.npz",
+        dkac_pred=pred_dkac["preds"],
+        edmd_pred=pred_edmd["preds"],
+        true=pred_dkac["states_true"],
+    )
+    print(
+        f"      model RMSE: DKAC={float(pred_dkac['total_rmse']):.6g}, "
+        f"EDMD={float(pred_edmd['total_rmse']):.6g}"
+    )
+
+    print("[6/7] Running closed-loop Koopman-space LQR tracking on MuJoCo...")
     ref = build_tracking_reference(
         args.dt,
         args.track_steps,
@@ -779,7 +903,8 @@ def main() -> None:
     np.savez_compressed(out_dir / "closed_loop_dkac.npz", **log_dkac)
     np.savez_compressed(out_dir / "closed_loop_edmd.npz", **log_edmd)
 
-    print("[6/6] Plotting and saving summary...")
+    print("[7/7] Plotting and saving summary...")
+    plot_model_prediction_error(pred_dkac, pred_edmd, args.dt)
     plot_joint_tracking(log_dkac, log_edmd)
     plot_tracking_error(log_dkac, log_edmd)
     plot_tracking_rmse(log_dkac, log_edmd)
@@ -815,6 +940,11 @@ def main() -> None:
             "latent_dim": edmd_pred.latent_dim,
             "sigma": edmd_pred.sigma,
             "cond_number": edmd_pred.cond_number,
+        },
+        "model_prediction": {
+            "DKAC": model_prediction_metrics(pred_dkac),
+            "EDMD": model_prediction_metrics(pred_edmd),
+            "protocol": "open-loop rollout on validation MuJoCo trajectories using recorded PD inputs",
         },
         "metrics": metrics,
         "elapsed_sec": time.time() - t0,

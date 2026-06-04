@@ -438,7 +438,7 @@ def train_deepkoopman(
         bound_lift=cfg.bound_lift,
     ).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-    best_val = float("inf")
+    best_val_full = float("inf")
     best_epoch = 0
     history: List[List[float]] = []
 
@@ -459,30 +459,31 @@ def train_deepkoopman(
         for key in acc:
             acc[key] /= max(cfg.steps_per_epoch, 1)
 
-        val = evaluate_window_loss(model, Xw_va, Uw_va, cfg, device)
+        val_full = evaluate_window_loss(model, Xw_va, Uw_va, cfg, device)
         with torch.no_grad():
             sigma_A = float(spectral_norm_power(model.A.weight).item())
         history.append(
             [
                 float(epoch),
                 acc["total"], acc["pred"], acc["linear"],
-                val["total"], val["pred"], val["linear"],
+                val_full["total"], val_full["pred"], val_full["linear"],
             ]
         )
         print(
             f"[dk] epoch {epoch:03d}/{cfg.epochs:03d} H={horizon:02d} "
             f"train={acc['total']:.3e} (pred={acc['pred']:.3e} lin={acc['linear']:.3e} "
-            f"stab={acc['stab']:.2e}) val={val['total']:.3e} ||A||2={sigma_A:.4f}",
+            f"stab={acc['stab']:.2e}) valFull={val_full['total']:.3e} ||A||2={sigma_A:.4f}",
             flush=True,
         )
-        if val["total"] < best_val:
-            best_val = val["total"]
+        if val_full["total"] < best_val_full:
+            best_val_full = val_full["total"]
             best_epoch = epoch
             torch.save(
                 {
                     "model_state": model.state_dict(),
                     "config": asdict(cfg),
-                    "best_val": best_val,
+                    "best_val_full": best_val_full,
+                    "best_selection": "fixed full-window validation loss",
                     "epoch": epoch,
                 },
                 out_dir / "best_full_deepkoopman.pt",
@@ -491,7 +492,11 @@ def train_deepkoopman(
     ckpt = torch.load(out_dir / "best_full_deepkoopman.pt", map_location=device, weights_only=False)
     model.load_state_dict(ckpt["model_state"])
     model.eval()
-    return model, history, {"best_val": float(best_val), "best_epoch": float(best_epoch)}
+    return model, history, {
+        "best_val_full": float(best_val_full),
+        "best_epoch": float(best_epoch),
+        "best_selection": "fixed full-window validation loss",
+    }
 
 
 # ============================================================================
@@ -809,7 +814,7 @@ def plot_training_history(history: List[List[float]]) -> None:
     arr = np.asarray(history, dtype=np.float64)
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.semilogy(arr[:, 0], arr[:, 1], label="train total")
-    ax.semilogy(arr[:, 0], arr[:, 4], label="val total")
+    ax.semilogy(arr[:, 0], arr[:, 4], label="val full-window")
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Loss")
     ax.grid(True, alpha=0.3)
@@ -1086,7 +1091,7 @@ def main() -> None:
         out_dir / "training_history.csv",
         np.asarray(history, dtype=np.float64),
         delimiter=",",
-        header="epoch,train_total,train_pred,train_linear,val_total,val_pred,val_linear",
+        header="epoch,train_total,train_pred,train_linear,val_full_total,val_full_pred,val_full_linear",
         comments="",
     )
     plot_training_history(history)

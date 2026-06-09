@@ -1,0 +1,10 @@
+{
+  "_comment": "闭环跟踪参考轨迹默认配置。run_04_tracking_compare.py 可用 CLI 覆盖这些值。",
+  "T_track": 4.0,
+  "T_ramp": 2.0,
+  "qa0": 0.0,
+  "qa1": 0.6,
+  "qb0": 0.0,
+  "qb1": -0.45,
+  "dq_reference": "finite_difference"
+}

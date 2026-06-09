@@ -1,0 +1,10 @@
+{
+  "_comment": "通用实验配置模板。实际运行时 CLI 参数优先生效，本文件用于记录推荐默认值。",
+  "dt": 0.01,
+  "state_order": ["qa", "qb", "dqa", "dqb"],
+  "input_order": ["tau_a", "tau_b"],
+  "cable_order": ["cable11", "cable12", "cable13", "cable14", "cable21", "cable22", "cable23", "cable24"],
+  "prediction_modes": ["one_step", "rollout"],
+  "control_capable_models": ["edmd", "dkuc", "dkac"],
+  "prediction_only_models": ["dkn"]
+}

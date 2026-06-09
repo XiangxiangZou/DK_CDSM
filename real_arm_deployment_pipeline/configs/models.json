@@ -1,0 +1,24 @@
+{
+  "_comment": "四类模型的定位说明。训练参数由 run_02_train_all_models.py 的 CLI 控制。",
+  "edmd": {
+    "form": "z=[x_n, rbf(x_n)], z_next=A z+B u_n",
+    "prediction": true,
+    "tracking_control": true
+  },
+  "dkuc": {
+    "form": "z=[x_n, phi_x(x_n)], z_next=A z+B u_n",
+    "prediction": true,
+    "tracking_control": true
+  },
+  "dkac": {
+    "form": "z=[x_n, phi_x(x_n)], v=G(x_n)u_n, z_next=A z+B v",
+    "prediction": true,
+    "tracking_control": true
+  },
+  "dkn": {
+    "form": "z=[x_n, phi_x(x_n)], u_hat=g(x_n,u_n), z_next=A z+B u_hat",
+    "prediction": true,
+    "tracking_control": false,
+    "note": "DKN 当前只进入预测评估；闭环跟踪需要单独 nonlinear MPC 或局部线性化接口。"
+  }
+}

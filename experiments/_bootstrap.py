@@ -1,4 +1,4 @@
-"""Run existing experiment scripts through a stable organized entry point."""
+"""Legacy-only adapter for historical scripts retained in archive."""
 
 from __future__ import annotations
 

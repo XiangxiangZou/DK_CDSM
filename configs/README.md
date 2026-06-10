@@ -9,5 +9,6 @@ Current configuration group:
 - `deployment/experiment_common.json`: state, control, cable order, and timing.
 - `deployment/models.json`: model capability declarations.
 - `deployment/tracking_reference.json`: default joint tracking reference.
-- `project/`: archived environment, dependency, build, editor, and agent files
-  from the former repository root.
+- `project/`: archived editor and agent templates from the former repository
+  root. The canonical build, pytest, and dependency files are
+  `/pyproject.toml` and `/requirements.txt`.

@@ -193,8 +193,8 @@ Dependencies may be changed only in the configured environment:
 
 After installing, upgrading, or removing a package:
 
-1. Update `configs/project/requirements.txt`.
-2. Update `configs/project/pyproject.toml` when project metadata or declared
+1. Update the root `requirements.txt`.
+2. Update the root `pyproject.toml` when project metadata or declared
    dependencies are affected.
 3. Verify the package through `PYTHON_EXE`.
 4. Report the dependency change.

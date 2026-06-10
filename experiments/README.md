@@ -14,9 +14,12 @@ Run entries from the project root with the configured environment:
 Use module execution (`-m`) rather than invoking an entry file by path. This
 keeps the project root and `src/` import paths stable on Windows.
 
-The current entries are compatibility adapters around validated workflows in
-`archive/`. This keeps existing results reproducible while reusable
-implementations live in `src/`.
+The deployment pipeline entries call reusable implementations in `src/`
+directly. They do not execute scripts from `archive/`.
+
+Some baseline, early control, model-comparison, and diagnostic entries remain
+legacy adapters for historical reproducibility. New work must not add another
+`archive/` dependency; migrate the reusable implementation into `src/` first.
 
 ## Deployment Pipeline
 

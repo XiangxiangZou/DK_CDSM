@@ -16,4 +16,13 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["src", "."]
+norecursedirs = [
+    "archive",
+    "outputs",
+    ".git",
+    ".pytest_cache",
+    "__pycache__",
+]
 addopts = "-ra"

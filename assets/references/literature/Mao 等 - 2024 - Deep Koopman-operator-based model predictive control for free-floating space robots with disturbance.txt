@@ -1,0 +1,1296 @@
+                                          Aerospace Science and Technology 154 (2024) 109515
+                                                 Contents lists available at ScienceDirect
+
+                                   Aerospace Science and Technology
+
+                                       journal homepage: www.elsevier.com/locate/aescte
+
+Deep Koopman-operator-based model predictive control for free-Ô¨Çoating
+space robots with disturbance observer
+
+Renhao Mao a, Tao Meng a,b,‚àó, Kun Wang c, Jiakun Lei d, Weijia Wang a
+
+a School of Aeronautics and Astronautics, Zhejiang University, Hangzhou, 310027, China
+b Huanjiang Laboratory, Zhuji, 311899, China
+c Hangzhou Innovation Institute, Beihang University, Hangzhou, 310051, China
+d Hangzhou International Innovation Institute, Beihang University, Hangzhou, 311115, China
+
+ARTICLE INFO                       ABSTRACT
+
+Communicated by Tsourdos Antonios  This paper investigates the optimal tracking control problem of free-Ô¨Çoating space robots in the presence of
+                                   non-ideal factors, such as model uncertainties and external disturbances. To address this issue, we Ô¨Årst leverage
+Keywords:                          the deep Koopman operator, facilitated with a deep neural network, to establish an oÔ¨Ñine formulation of a
+Free-Ô¨Çoating space robot           global linearization model for a micro-nano free-Ô¨Çoating space robot. Based on the estimated linearization
+Koopman operator                   model, we then employ the model predictive control method for online optimization control, achieving a
+Deep neural networks               signiÔ¨Åcantly reduced computational burden. Additionally, a decay factor is integrated into the model predictive
+Disturbance observer               control optimization objective function to balance the precision of joint angles tracking with the suppression
+Model predictive control           of base satellite attitude disturbance. To further address the modeling inaccuracies and external disturbances,
+                                   we incorporate a disturbance observer based on a radial basis function neural network for online compensation
+                                   within the model predictive control framework. This augmentation enhances tracking precision and robustness.
+                                   Several groups of simulation results are carried out to demonstrate the eÔ¨Äectiveness of the proposed method,
+                                   showing its capability of energy consumption, disturbance rejection and enhanced robustness. These highlight
+                                   the potential of the proposed method to improve the control performance of free-Ô¨Çoating space robots, even in
+                                   the absence of a precise dynamic model.
+
+1. Introduction                                                           and adaptive control [8], aiming to achieve high-precision and robust
+                                                                          control of space robots. To mitigate the chattering eÔ¨Äect caused by the
+    Due to their ability to enhance spacecraft capability for execut-     switching of the sliding mode surface, an intelligent adaptive method
+ing complex on-orbit tasks, space robots designed for on-orbit space-     based on sliding mode control was introduced [9]. Considering the need
+craft have attracted signiÔ¨Åcant attention [1]. In the Ô¨Åeld of space       for rapid control speed in space missions, Ô¨Åxed-time and predeÔ¨Åned-
+robots, micro-nano space robots are gaining recognition for their cost-   time control methods have been proposed in [10,11], reducing the con-
+eÔ¨Äectiveness and adaptable deployment capabilities. However, micro-       vergence time. To guarantee transient and steady-state performance, the
+nano space robots, typically weighing in the range of hundreds or even    prescribed performance control method is adopted in [12]. While these
+several kilograms, exhibit more complex dynamic coupling characteris-     various control methods address diÔ¨Äerent control challenges, they are
+tics due to the higher inertia and mass ratios of their manipulators and  fundamentally based on speciÔ¨Åc physical models. To enhance the accu-
+base satellites compared to larger space robots [2]. This makes it more   racy of dynamic models, Sands [13] developed deterministic artiÔ¨Åcial
+diÔ¨Écult to establish accurate dynamic models, which complicates the       intelligence techniques by integrating system identiÔ¨Åcation, physics-
+control problem.                                                          based methodologies, and adaptive control. This approach incorporates
+                                                                          the self-awareness statement of deterministic artiÔ¨Åcial intelligence pro-
+    Extensive research has been conducted in the Ô¨Åeld of space robot      posed in [14], using the 2-norm optimal solution to estimate model un-
+control. To address model uncertainties and external disturbances, re-    certainties online. Building on deterministic artiÔ¨Åcial intelligence tech-
+searchers have proposed sliding mode control [3‚Äì6], fuzzy control [7]
+
+ * Corresponding author at: School of Aeronautics and Astronautics, Zhejiang University, Hangzhou, 310027, China.
+     E-mail address: mengtao@zju.edu.cn (T. Meng).
+
+https://doi.org/10.1016/j.ast.2024.109515
+Received 23 April 2024; Received in revised form 1 August 2024; Accepted 20 August 2024
+Available online 23 August 2024
+1270-9638/¬© 2024 Elsevier Masson SAS. All rights are reserved, including those for text and data mining, AI training, and similar technologies.
+R. Mao, T. Meng, K. Wang et al.                                                                     Aerospace Science and Technology 154 (2024) 109515
+
+Nomenclature
+
+LQR           linear quadratic regulator                     Ì†µÌΩàÌ†µÌ±ñ             activation functions
+
+MPC model predictive control                                 Ì†µÃÑÌ≤öÌ†µÌ±ñ            outputs for each layer transformation
+
+NMPC nonlinear model predictive control                      Ì†µÌ±Ü               multi-step prediction in loss function
+
+EDMD extending dynamic mode decomposition                    Óà∏                loss function
+
+DNN deep neural network                                      Óà∏1,Óà∏2 components of the loss function
+                                                             ‚ÄñÌ†µÌºΩÌ†µÃÑÌ±ä ‚Äñ22 Ì†µÌ±ô2 regularization term
+DK            deep Koopman operator                          Ì†µÌªº1,Ì†µÌªº2,Ì†µÌªº3 hyperparameters of loss function
+                                                             ŒîÌ†µÌ±®, ŒîÌ†µÌ±© approximation errors from truncating the nonlinear system
+DO            disturbance observer
+
+RBFNN radial basis function neural network
+
+RBFNN-DO DO based on RBFNN                                   ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)),Ì†µÌºπ(Ì†µÌ±ò) components of the uncertainties
+
+DOF degrees of freedom                                       Ì†µÌ≤Ö(Ì†µÌ±ò) disturbances in the lifted space
+
+ReLU rectiÔ¨Åed linear units                                   Ì†µÌ∞∫Ì†µÌ±ñ(Ì†µÌ≤õ(Ì†µÌ±ò))     Gaussian function
+                                                             Ì†µÌºª Ì†µÌ±ñ            center of each Gaussian function
+UUB uniformly ultimately bounded                             ‚ÑèÌ†µÌ±ñ              width of each Gaussian function
+                                                             Ì†µÌ±ô               number of Gaussian functions
+ISS           input-to-state stable
+
+DH            Denavit-Hartenberg
+
+RRMSE relative root mean square error                        Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò)) composed of Ì†µÌ∞∫Ì†µÌ±ñ(Ì†µÌ≤õ(Ì†µÌ±ò))
+                                                             Ì†µÌ±æ ‚àó(Ì†µÌ±ò) optimal weights matrix of RBFNN
+DK-MPC MPC control based on DK model
+                                                             Ì†µÌº∫‚àó(Ì†µÌ≤õ(Ì†µÌ±ò)) approximation error of RBFNN
+DK-LQR LQR control based on the DK model                     Ì†µÃÇÌ±æ (Ì†µÌ±ò) estimation of Ì†µÌ±æ ‚àó(Ì†µÌ±ò)
+                                                             Ì†µÃÉÌ±æ (Ì†µÌ±ò) estimation error of optimal weights
+EDMD-MPC MPC control based on EDMD model
+
+MSE mean square error
+
+EV            error variance                                 Ì†µÌ±´(Ì†µÌ±ò) lumped disturbances
+
+SMAE sum of maximum absolute error                           Ì†µÌΩÉ(Ì†µÌ±ò)           variable of RBFNN-DO
+
+ISCI          integral of square control input               Ì†µÃÇÌ≤õ(Ì†µÌ±ò)          estimation of Ì†µÌ≤õ(Ì†µÌ±ò)
+
+IV            input variance                                 Ì†µÌºÇ, Ì†µÌªæ,Ì†µÌªº hyperparameters of RBFNN-DO
+
+IBSAD integral base satellite attitude disturbance           Ì†µÌ±∑ (Ì†µÌ±ò) virtual variable of DO
+                                                             Ì†µÃÇÌ±∑ (Ì†µÌ±ò) estimation of Ì†µÃÇÌ±∑ (Ì†µÌ±ò)
+Ì†µÃáÌ≤í           velocity vector of the base satellite          Ì†µÃÇÌ±´(Ì†µÌ±ò) estimation of Ì†µÃÇÌ±´(Ì†µÌ±ò)
+                                                             ŒîÌ†µÃÇÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) estimation of ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò))
+Ì†µÌ≤ó0           linear velocities of the base satellite
+
+Ì†µÌΩé0           angular velocities of the base satellite       Ì†µÌ±ø Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì
+                                                             Œì(Ì†µÌ±ò)
+Ì†µÌºΩ            joint angles of the manipulator                                 time-varying reference trajectory
+                                                                              decay factor
+Ì†µÌ±Ø Ì†µÌ±è         inertia matrix of the base satellite
+Ì†µÌ±Ø Ì†µÌ±ö         inertia matrix of the manipulator              Ì†µÌºì(Ì†µÌ±ò) variable of decay factor
+Ì†µÌ±Ø Ì†µÌ±èÌ†µÌ±ö       coupling inertia matrix
+Ì†µÌ≤Ñ Ì†µÌ±è ,Ì†µÌ≤Ñ Ì†µÌ±ö  vectors of nonlinear terms                     Ì†µÌºìmin,Ì†µÌºìmax hyperparameters of decay factor
+Ì†µÌ≤ñ            control torque acting on the manipulator
+                                                             Ì†µÌ∞ø(‚ãÖ)            each stage cost function of MPC
+
+                                                             Ì†µÌ∞øÌ†µÌ±ì (‚ãÖ) terminal cost function of MPC
+
+Ì†µÌ≤ôÌ†µÌºÉ          Joint angles and angular velocities            Ì†µÌ±ÅÌ†µÌ±ù             prediction horizon of MPC
+
+Ì†µÌ≤ô            composed of Ì†µÌ≤ôÌ†µÌºÉ and Ì†µÌΩé0                       Ì†µÌ±∏1,Ì†µÌ±∏2,Ì†µÌ±∏Ì†µÌ±Å ,Ì†µÌ±π weights of MPC
+                                                             Ì†µÌ†µÌ±¢Ì±¢Ì†µmmÌ†µÌºÑÌºÑ ainx
+Ì†µÌ≤â(‚ãÖ)         dynamical system evolution                                      lower bound of control inputs for each joint
+                                                                              upper bound of control inputs for each joint
+Ì†µÌ∫´Ì†µÌ±è          disturbances exerted on the base satellite
+                                                             Ì†µÌ±¢Ì†µÌºÑ             control input of the Ì†µÌºÑ-th joint
+Ì†µÌ∫´Ì†µÌ±ö          disturbances exerted on the manipulator
+                                                             Ì†µÌ≤ò(Ì†µÌ±ò) estimation error of disturbances
+Ì†µÌ≤á (‚ãÖ)        discrete dynamical system evolution
+                                                             Ì†µÌª∂               bound of disturbances estimation error
+Óâë             Koopman operator                                      Ì†µÌºÉÌ†µÌ±ñ      desired joint angles
+                                                             Ì†µÌ±ø     Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì
+Ì†µÌ≤à(‚ãÖ)         observable function                                             desired joint angular velocities
+                                                                    Ì†µÌºÉÃá Ì†µÌ±ñ    embedding function of EDMD
+Ì†µÌ≤àÌ†µÌ±•(‚ãÖ)       part of the observable function                Ì†µÌ±ø     Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì    basis functions of the lifted space in EDMD
+Ì†µÌ≤õ(Ì†µÌ±ò)                                                                        kernel centers of basis functions in EDMD
+              approximation of Ì†µÌ≤àÌ†µÌ±•(‚ãÖ)                       Ì†µÌ≤õÌ†µÌ∞∏ (Ì†µÌ≤ô)        cost function of DK-LQR
+Ì†µÌ±≤            Ô¨Ånite-dimensional approximation of Óâë                            cost function of NMPC
+                                                             Ì†µÌºëÌ†µÌ∞∏Ì†µÌ±ñ(Ì†µÌ≤ô)       angles tracking errors of each joint
+Ì†µÌ±≤Ì†µÌ±•Ì†µÌ±•,Ì†µÌ±≤Ì†µÌ±•Ì†µÌ±¢,Ì†µÌ±≤Ì†µÌ±¢Ì†µÌ±•,Ì†µÌ±≤Ì†µÌ±¢Ì†µÌ±¢ block matrices of Ì†µÌ±≤                              composed of Ì†µÌ±íÌ†µÌ±ñ(Ì†µÌ±ò)
+                                                             Ì†µÌΩá Ì†µÌ±ñ            average of Ì†µÌ≤Ü(Ì†µÌ±ò)
+Ì†µÌ±®, Ì†µÌ±©        Ì†µÌ±® = Ì†µÌ±≤Ì†µÌ±•Ì†µÌ±• and Ì†µÌ±© = Ì†µÌ±≤Ì†µÌ±•Ì†µÌ±¢                                     average of Ì†µÌ≤ñ(Ì†µÌ±ò)
+                                                             Ì†µÌ∞ΩÌ†µÌ∞øÌ†µÌ±ÑÌ†µÌ±Ö
+
+Ì†µÌ∫Ω(Ì†µÌ≤ô(Ì†µÌ±ò)) basis of the lifted space                         Ì†µÌ∞ΩÌ†µÌ±ÅÌ†µÌ±ÄÌ†µÌ±É Ì†µÌ∞∂
+
+Ì†µÌ±ø,Ì†µÌ±º ,Ì†µÌ≤Ä datasets collected from the dynamics               Ì†µÌ±íÌ†µÌ±ñ(Ì†µÌ±ò)
+
+Ì†µÌº£ ,Ì†µÌº¥        Ì†µÌ±ø and Ì†µÌ≤Ä in lifted space                      Ì†µÌ≤Ü(Ì†µÌ±ò)
+Ì†µÃÑÌ±ô           number of Residual blocks
+Ì†µÃÑÌ±æ Ì†µÌ±ñ        weight matrices of the DNN                     Ì†µÌΩÅÌ†µÌ±í
+                                                             Ì†µÌΩÅÌ†µÌ±¢
+
+                                                          2
+R. Mao, T. Meng, K. Wang et al.                                                                                                 Aerospace Science and Technology 154 (2024) 109515
+
+niques, methods such as whiplash compensation [15] and curve Ô¨Çatten-            operator, enhancing the robustness of the controlled system after system
+ing [16] were employed to improve the control performance of Ô¨Çexible            parameters switched. While these approaches demonstrate promising
+space robots.                                                                   theoretical outcomes, the complexity and direct applicability of tube-
+                                                                                based or adaptive MPC remain challenging [38]. Consequently, certain
+    For micro-nano space robots, due to limited on-orbit resources and          studies have embraced robust model predictive control strategies for
+control abilities, the utilization of optimized control strategy oÔ¨Äers ad-      controller design. Zhu et al. [39] employed a discrete nonlinear distur-
+vantages as it reduces energy consumption. In the context of optimized          bance observer to address modeling errors and external disturbances
+control methods, the linear quadratic regulator (LQR) provides an an-           in the Koopman operator, oÔ¨Äering direct compensation through MPC
+alytical solution for the optimal control gain by directly solving the          framework feedback. However, this approach could risk violating input
+Riccati equation for linear systems, but it is unable to handle constraints     constraints. Ren et al. [40] uses an extended state disturbance observer
+[17]. In nonlinear optimized control methods, adaptive dynamic pro-             to estimate the total disturbance, ignoring the diÔ¨Äerences between mod-
+gramming approximates the Hamilton-Jacobi-Bellman equation using                eling errors and external disturbances.
+a neural network to obtain approximate optimal solutions [18]. How-
+ever, for complex models, achieving approximate optimal solution con-               Unlike Ô¨Åxed-base manipulators, free-Ô¨Çoating space robots experi-
+vergence online remains a signiÔ¨Åcant challenge, potentially leading to          ence disturbances at the base satellites due to coupling eÔ¨Äects when
+system instability. Model predictive control (MPC), a constrained opti-         maneuvering their joints, particularly aÔ¨Äecting micro-nano space robots
+mal control strategy that computes optimal control inputs by minimizing         signiÔ¨Åcantly. The base satellite attitude disturbance caused by joint
+a speciÔ¨Åed objective function over a Ô¨Ånite prediction horizon, has seen         angles‚Äô movements in turn aÔ¨Äect the manipulator, impacting the con-
+widespread application in aerospace research [19‚Äì21]. Although MPC              trol eÔ¨Äectiveness. Thus, examining the control strategy for free-Ô¨Çoating
+is eÔ¨Äective, traditional MPC is designed for linear models. Given that          space robots with the base satellite attitude disturbance is meaningful
+space robots are nonlinear and dynamically coupled systems, applying            [41]. However, in a uniÔ¨Åed MPC framework, eÔ¨Äorts to minimize the
+MPC directly to space robot control is challenging. Based on the MPC            base satellite attitude disturbance can unintentionally reduce the accu-
+concept, some research has utilized nonlinear model predictive control          racy of joint angles tracking.
+(NMPC) for space robots [22,23]. However, due to its reliance on com-
+plex nonlinear models, NMPC requires precise modeling and imposes a                 In summary, developing a constrained optimal control method for
+signiÔ¨Åcant computational burden, making it diÔ¨Écult to apply in micro-           micro-nano space robots that reduces the computational burden, ac-
+nano space robots.                                                              counts for both internal and external disturbances, avoids complex
+                                                                                dynamic models, and suppresses base satellite attitude disturbances,
+    Recently, the Koopman operator has garnered signiÔ¨Åcant attention            presents a challenge. In this paper, we initially utilize DK to establish
+for data-driven modeling. Introduced by B.O. Koopman in 1931 [24],              a global linearization model of micro-nano space robots using DNN,
+the fundamental concept of the Koopman operator involves globally               laying the groundwork for subsequent optimization controller design.
+linearizing a nonlinear system within an inÔ¨Ånite-dimensional embed-             To handle modeling inaccuracies and external disturbances, we utilize
+ding space. The ability of the Koopman operator to linearize systems            a disturbance observer (DO) based on a radial basis function neural
+facilitates simpler controller design and reduces the computational bur-        network (RBFNN) within the MPC framework, thereby improving the
+den, leading to its increased adoption in aerospace research [25‚Äì27].           precision and robustness of the controller without violating input con-
+Given the impracticality of accessing an inÔ¨Ånite-dimensional space in           straints. Additionally, to suppress base satellite attitude disturbance, we
+real applications, it‚Äôs necessary to use Ô¨Ånite-dimensional lifted observ-       introduce an optimization objective function into MPC with a decay
+able functions for eÔ¨Äective system approximation. Initially, researchers        factor to suppress the base satellite attitude disturbance without com-
+utilized the Koopman operator in control system design through the              promising tracking precision.
+extending dynamic mode decomposition (EDMD) method [28]. EDMD
+employs radial basis or polynomial functions to approximate nonlinear               The main contributions of this paper are as follows:
+models in Ô¨Ånite dimensions. However, the manual selection of suitable
+lifted observable functions for complex nonlinear systems has been a            (1) The data-driven modeling method based on the DK is applied to
+signiÔ¨Åcant challenge. In recent years, with the advancement of arti-                 a free-Ô¨Çoating space robot, achieving a global approximation lin-
+Ô¨Åcial intelligence, attention has shifted towards training deep neural               earization model of the free-Ô¨Çoating space robot solely through the
+networks (DNN) to identify lifted observable functions, has replaced tra-            collection of system inputs and outputs data. To the best of our
+ditional manual methods and become the mainstream trend [29‚Äì32].                     knowledge, few studies have focused on applying DK to free-Ô¨Çoating
+This method collects input-state data oÔ¨Ñine, uses the Koopman opera-                 space robots.
+tor to derive a high-dimensional global linearization model, and trains
+DNN as lifted observable functions (a more detailed description of how          (2) To mitigate modeling errors from the Koopman operator and exter-
+the Koopman operator works is provided in Section 3). The Koopman                    nal disturbances, a DO based on an RBFNN (RBFNN-DO) embedded
+operator has emerged as a novel approach for MPC implementation in                   within MPC is designed. This improves joint angles tracking pre-
+nonlinear systems. References [33‚Äì35] used the deep Koopman opera-                   cision and enhances robustness to external disturbances, all while
+tor (DK) to construct high-dimensional linearized models of nonlinear                adhering to input constraints.
+systems, which they then applied MPC for controller design. This ap-
+proach signiÔ¨Åcantly reduces optimization time by eliminating the need           (3) In response to base satellite attitude disturbance caused by ma-
+for a traditional model-based methodology, unlike NMPC, and avoids                   neuvering joint angles, an objective function with a decay factor
+the complexity of dynamic modeling.                                                  is proposed. This function seeks to balance the trade-oÔ¨Ä between
+                                                                                     minimizing base satellite attitude disturbance and maintaining joint
+    However, it is unavoidable to encounter discrepancies in modeling                angles tracking precision, thereby reducing the base satellite at-
+between the high-dimensional linear model derived from the Koop-                     titude disturbance without compromising tracking precision and
+man operator and the original nonlinear system model. Furthermore,                   enhancing the dynamic characteristics of the tracking process.
+real-world systems inevitably encounter disturbances, which can sig-
+niÔ¨Åcantly aÔ¨Äect control eÔ¨Écacy. To address both internal and external               The rest of this paper is organized as follows: The problem is formu-
+disturbances, researchers have also conducted undertaken investiga-             lated in Section 2. Section 3 introduces the fundamental principles of
+tions. Zhang et al. [36] designed a tube-based MPC controller based             the Koopman operator, and establishes a DK model for the free-Ô¨Çoating
+on the Koopman operator, improving the system‚Äôs control precision and           space robot. Section 4 details the design of RBFNN-DO embedded within
+robustness to disturbances. Chen et al. [37] designed an adaptive MPC           MPC, incorporating a decay factor in the MPC objective function. Sec-
+controller for time-varying parameter systems based on the Koopman              tion 5 conducts numerical simulations. Section 6 conducts analyses and
+                                                                                discussions of the simulation results. Section 7 concludes the paper.
+
+                                                                             3
+R. Mao, T. Meng, K. Wang et al.                                                                                                            Aerospace Science and Technology 154 (2024) 109515
+
+                        Fig. 1. Model of a free-Ô¨Çoating space robot.                                        Fig. 2. Schematic of the Koopman operator operating on nonlinear system.
+
+             Table 1                                                                                     Ô¨Åcult. What is worse, in the real-world the dynamics (1) is usually
+             Free-Ô¨Çoating space robot symbols and variables.                                             unknown, especially for micro-nano space robots [43].
+
+             Symbol or Variable       DeÔ¨Ånition                                                          Assumption 1. The joint angles, joint angular velocities and the base
+                                                                                                         satellite angular velocities of the free-Ô¨Çoating space robot are all mea-
+             ÓàÆ0                       base satellite                                                     surable.
+             ÓàÆÌ†µÌ±ñ                      Link Ì†µÌ±ñ, Ì†µÌ±ñ = 1, 2, ‚ãØ , Ì†µÌ±õ
+             Óà∂Ì†µÌ±ñ                      Joint Ì†µÌ±ñ, Ì†µÌ±ñ = 1, 2, ‚ãØ , Ì†µÌ±õ                                           Considering the tracking control of the manipulator‚Äôs joint angles
+             ÓàØ0                       center of mass (CM) of the base satellite
+             ÓàØÌ†µÌ±ñ                      CM of the ÓàÆÌ†µÌ±ñ                                                      and the suppression of base satellite attitude disturbance during the
+             ‚àëÓàØÌ†µÌ±î                     CM of the system
+                                                                                                         tracking control process. Therefore, refer to Assumption 1, a dataset con-
+             ‚àëÓàµ                       the inertial coordinate frame
+                                                                                                         taining joint angles, joint angular veloci[ties                         and  base   satellite  aÌ†µnÌºÉÃá Ì†µÌ±õg]u‚ä§la‚ààr
+                ÓàÆ                     the base satellite coordinate frame                                velocities can      bÌ†µeÌΩé‚ä§0o]b‚ä§ta. iTnheed.dDyneaÔ¨ÅmneicÌ†µÌ≤ôEÌ†µÌºÉq=uatiÌ†µÌºÉo1n   ‚ãØ    Ì†µÌºÉÌ†µÌ±õ  Ì†µÌºÉÃá 1 ‚ãØ
+                                                                                                         ‚Ñù2Ì†µÌ±õ, Ì†µÌ≤ô = [ Ì†µÌ≤ôÌ†µ‚ä§ÌºÉ                                                      (1)
+             Ì†µÌ≤ìÌ†µÌ±î ‚àà ‚Ñù3                position vector of the space robot                                                                                                              can be succinctly rep-
+             Ì†µÌ≤ì0 ‚àà ‚Ñù3
+             Ì†µÌ≤ìÌ†µÌ±ñ ‚àà ‚Ñù3                position vector of the base satellite                              resented as follows:
+             Ì†µÌ±ö0 ‚àà ‚Ñù1                 position vector of ÓàÆÌ†µÌ±ñ
+             Ì†µÌ±öÌ†µÌ±ñ ‚àà ‚Ñù1                mass of the base satellite                                         Ì†µÃáÌ≤ô = Ì†µÌ≤â(Ì†µÌ≤ô, Ì†µÌ≤ñ)                                                                               (2)
+             Ì†µÌ±∞ 0 ‚àà ‚Ñù3√ó3              mass of ÓàÆÌ†µÌ±ñ
+             Ì†µÌ±∞ Ì†µÌ±ñ ‚àà ‚Ñù3√ó3             inertia matrix of the base satellite                               where Ì†µÌ≤â ‚à∂ ‚Ñù2Ì†µÌ±õ+3 √ó ‚ÑùÌ†µÌ±õ ‚Üí ‚Ñù2Ì†µÌ±õ+3 is a smooth vector Ô¨Åeld of Ì†µÌ∞∂‚àû, describing
+             Ì†µÌ≤É0 ‚àà ‚Ñù1                 inertia matrix of ÓàÆÌ†µÌ±ñ
+             Ì†µÌ≤ÇÌ†µÌ±ñ ‚àà ‚Ñù1                length from ÓàØ0 to Óà∂1                                               the evolution of the dynamical system.
+             Ì†µÌ≤ÉÌ†µÌ±ñ ‚àà ‚Ñù1                length from Óà∂Ì†µÌ±ñ to ÓàØÌ†µÌ±ñ
+                                      length from ÓàØÌ†µÌ±ñ to Óà∂Ì†µÌ±ñ+1
+
+                                                                                                            In practical scenarios, free-Ô¨Çoating space robots inevitably encounter
+
+    Notations: For positive integers Ì†µÌ±õ and Ì†µÌ±ö, Ì†µÌøéÌ†µÌ±õ ‚àà ‚ÑùÌ†µÌ±õ denotes a vector                              external disturbances. Consequently, Equation (1) can be reformulated
+with all value 0. Ì†µÌøèÌ†µÌ±õ ‚àà ‚ÑùÌ†µÌ±õ denotes a vector with all value 1. Ì†µÌ∞àÌ†µÌ±õ ‚àà ‚ÑùÌ†µÌ±õ√óÌ†µÌ±õ
+denotes the Ì†µÌ±õ√óÌ†µÌ±õ identity matrix. For arbitrary vector Ì†µÌ≤Ç ‚àà ‚ÑùÌ†µÌ±õ, matrix Ì†µÌ∞Ä ‚àà                            as follows:         ][ ] [ ] [ ] [ ]
+‚ÑùÌ†µÌ±ö√óÌ†µÌ±õ and positive-deÔ¨Ånite matrix Ì†µÌ±æ ‚àà ‚ÑùÌ†µÌ±õ√óÌ†µÌ±õ, Ì†µÌ≤Ç‚ä§ denotes the tra‚àönspose                               [
+of Ì†µÌ≤Ç, Ì†µÌ≤Ç‚Ä† denotes the Moore-Penrose pseudoinverse of Ì†µÌ≤Ç, ‚ÄñÌ†µÌ≤Ç‚Äñ2 = Ì†µÌ≤Ç‚ä§Ì†µÌ≤Ç,                                    Ì†µÌ±Ø Ì†µÌ±è Ì†µÌ±Ø Ì†µÌ±èÌ†µÌ±ö    Ì†µÃàÌ≤í     Ì†µÌ≤ÑÌ†µÌ±è     Ì†µÌøé6     Ì†µÌ∫´Ì†µÌ±è
+‚ÄñÌ†µÌ≤Ç‚Äñ22 = Ì†µÌ≤Ç‚ä§Ì†µÌ≤Ç, ‚ÄñÌ†µÌ≤Ç‚ÄñÌ†µ2Ì±æ = Ì†µÌ≤Ç‚ä§Ì†µÌ±æ Ì†µÌ≤Ç, ‚ÄñÌ†µÌ∞Ä‚ÄñÌ†µÌ∞π denotes the Frobenius norm of Ì†µÌ∞Ä,                                    ‚ä§            Ì†µÃàÌºΩ  +  Ì†µÌ≤ÑÌ†µÌ±ö  =  Ì†µÌ≤ñ   +  Ì†µÌ∫´Ì†µÌ±ö                                              (3)
+Ì†µÌ≤Ç(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò) denotes the value of Ì†µÌ≤Ç at time Ì†µÌ±ò + Ì†µÌ±ñ, predicted at time Ì†µÌ±ò, if                            Ì†µÌ±Ø  Ì†µÌ±èÌ†µÌ±ö  Ì†µÌ±Ø Ì†µÌ±ö
+
+Ì†µÌ±ñ = 0, Ì†µÌ≤Ç(Ì†µÌ±ò|Ì†µÌ±ò) = Ì†µÌ≤Ç(Ì†µÌ±ò).                                                                              where Ì†µÌ∫´Ì†µÌ±è ‚àà ‚Ñù6 and Ì†µÌ∫´Ì†µÌ±ö ‚àà ‚ÑùÌ†µÌ±õ denote the disturbances exerted on the
+                                                                                                         base satellite and the manipulator, respectively.
+
+2. Problem formulation                                                                                   Assumption 2. The disturbances Ì†µÌ∫´Ì†µÌ±è and Ì†µÌ∫´Ì†µÌ±ö aÔ¨Äecting the free-Ô¨Çoating
+                                                                                                         space robot, and their derivatives, are bounded.
+
+   Consider a space robot consisting of a base satellite and a manipula-                                 3. DK for modeling free-Ô¨Çoating space robots
+
+tor with Ì†µÌ±õ degrees of freedom (DOF), as shown in Fig. 1. The symbols
+
+and variables of the space robot are deÔ¨Åned in Table 1.                                                      This section begins with an introduction to the fundamental prin-
+                                                                                                         ciples of the Koopman operator. Subsequently, we establish a high-
+   The dynamic equation expressed as follows is excited to collect data                                  dimensional approximate linearization model for a free-Ô¨Çoating space
+                                                                                                         robot based on the Koopman operator using DNN, laying the ground-
+for training in this paper [42]:                                                                         work for controller design.
+
+[  Ì†µÌ±Ø Ì†µÌ±è Ì†µÌ±Ø Ì†µÌ±èÌ†µÌ±ö    ][ ] [ ] [ ]                                                                         3.1. Koopman operator
+                        Ì†µÃàÌ≤í     Ì†µÌ≤ÑÌ†µÌ±è                  Ì†µÌøé6
+   Ì†µÌ±Ø  ‚ä§     Ì†µÌ±Ø Ì†µÌ±ö      Ì†µÃàÌºΩ  +  Ì†µÌ≤ÑÌ†µÌ±ö  =               Ì†µÌ≤ñ                         (1)
+       Ì†µÌ±èÌ†µÌ±ö
+
+where Ì†µÃáÌ≤í = [ Ì†µÌ≤ó0‚ä§ Ì†µÌΩé0‚ä§ ]‚ä§ ‚àà ‚Ñù6 is the velocity vector of the base satellite
+                                                               ‚Ñù3
+i‚Ñùn3c.luÌ†µÌºΩd=in[gÌ†µÌºÉt1he  Ì†µlÌºÉi2nea‚ãØr veÌ†µlÌºÉoÌ†µÌ±õc]i‚ä§tie‚ààs  Ì†µÌ≤ó0  ‚àà   the  and the angular velocities Ì†µÌΩé0 ‚àà         The Koopman operator is widely used to describe uncontrolled non-
+                                                      ‚ÑùÌ†µÌ±õ  is       joint angles of the manipulator,     linear dynamical systems [44,45]. Through a series of straightforward
+                                                                                                         transformations, it can also be adapted to characterize dynamical sys-
+and Ì†µÌºÉ1, Ì†µÌºÉ2, ‚ãØ , Ì†µÌºÉÌ†µÌ±õ denote the joint angle of each joint. Ì†µÌ±Ø Ì†µÌ±è ‚àà ‚Ñù6√ó6 and                            tems that incorporate control inputs. The operational procedure of the
+Ì†µÌ±Ø Ì†µÌ±ö ‚àà ‚ÑùÌ†µÌ±õ√óÌ†µÌ±õ are inertia matrices of the base satellite and the manipulator.                           Koopman operator on the nonlinear system is illustrated in Fig. 2.
+Ì†µÌ±Ø Ì†µÌ±èÌ†µÌ±ö ‚àà ‚Ñù6√óÌ†µÌ±õ is the coupling inertia matrix between the base satellite and
+the manipulator. Ì†µÌ≤ÑÌ†µÌ±è ‚àà ‚Ñù6 and Ì†µÌ≤ÑÌ†µÌ±ö ‚àà ‚ÑùÌ†µÌ±õ are vectors of nonlinear terms.                                    The dynamical system of the free-Ô¨Çoating space robot (2) in discrete
+Ì†µÌ≤ñ ‚àà ‚ÑùÌ†µÌ±õ is the control torque acting on the manipulator.                                                form can be presented as:
+
+   Space robot is a multi-input and multi-output nonlinear system with
+
+its output being strong coupled which makes the controller design dif-                                   Ì†µÌ≤ô(Ì†µÌ±ò + 1) = Ì†µÌ≤á (Ì†µÌ≤ô(Ì†µÌ±ò), Ì†µÌ≤ñ(Ì†µÌ±ò))                                                               (4)
+
+                                                                                                      4
+R. Mao, T. Meng, K. Wang et al.                                                                                                                                              Aerospace Science and Technology 154 (2024) 109515
+
+where Ì†µÌ≤ô(Ì†µÌ±ò) ‚àà ‚Ñù2Ì†µÌ±õ+3 and Ì†µÌ≤ñ(Ì†µÌ±ò) ‚àà ‚ÑùÌ†µÌ±õ denote the states and control inputs                                      Consequently, the matrices Ì†µÌ±® and Ì†µÌ±© in Equation (8) can be solved
+of the dynamical system at time Ì†µÌ±ò, respectively. Ì†µÌ≤á ‚à∂ ‚Ñù2Ì†µÌ±õ+3 √ó ‚ÑùÌ†µÌ±õ ‚Üí ‚Ñù2Ì†µÌ±õ+3                                 by minimizing the following least squares problem, as detailed in [37]:
+is a smooth vector Ô¨Åeld of Ì†µÌ∞∂‚àû, describing the evolution of the discrete
+                                                                                                             min         ‚ÄñÌ†µÌº¥  ‚àí     Ì†µÌ±®Ì†µÌº£      ‚àí     Ì†µÌ±©Ì†µÌ±º  ‚ÄñÌ†µÌ∞π                                                  (13)
+dynamical system.
+                                                                                                             Ì†µÌ±®,Ì†µÌ±©
+    Koopman operator Óâë is an inÔ¨Ånite-dimensional linear transforma-
+tion acting on the observable function Ì†µÌ≤à, and can be described as:                                                 The minimum norm solution of Equation (13) is:
+
+Ì†µÌ≤à(Ì†µÌ≤ô(Ì†µÌ±ò + 1), Ì†µÌ≤ñ(Ì†µÌ±ò + 1)) = ÓâëÌ†µÌ≤à(Ì†µÌ≤ô(Ì†µÌ±ò), Ì†µÌ≤ñ(Ì†µÌ±ò))                                               (5)           [             ][                            Ì†µÌ±º ]‚Ä†                                                 (14)
+                                                                                                              Ì†µÌ±®         Ì†µÌ±© = Ì†µÌº¥ Ì†µÌº£
+
+where Ì†µÌ≤à ‚à∂ ‚Ñù2Ì†µÌ±õ+3 √ó ‚ÑùÌ†µÌ±õ ‚Üí ‚ÑùÌ†µÌ±Å is a smooth vector Ô¨Åeld of Ì†µÌ∞∂‚àû, mapping                                        3.2. Train of DK
+
+the state space into the designated embedding space. The embedding
+
+function Ì†µÌ≤à can be further separated into two parts in terms of states and                                       In the early research on Koopman operator, the lifted observ-
+                                                                                                             able functions depended on manual selection. For complex nonlinear
+control inputs:                                                                                              systems, selecting appropriate lifted observable functions for Ô¨Ånite-
+                                                                                                             dimensional approximation is highly challenging. DNN oÔ¨Äers complex
+                      [  Ì†µÌ≤àÌ†µÌ±•(Ì†µÌ≤ô(Ì†µÌ±ò))  ]                                                                     mapping relationships, which provides new insights into the selection
+                           Ì†µÌ≤ñ(Ì†µÌ±ò)                                                                            of lifted observable functions in Koopman operator [46].
+Ì†µÌ≤à(Ì†µÌ≤ô(Ì†µÌ±ò), Ì†µÌ≤ñ(Ì†µÌ±ò)) =                                                                           (6)
+                                                                                                                 Fig. 3 illustrates the framework of training DK using DNN. This paper
+where Ì†µÌ≤àÌ†µÌ±• ‚à∂ ‚Ñù2Ì†µÌ±õ+3 ‚Üí ‚ÑùÌ†µÌ±Å‚àíÌ†µÌ±õ.                                                                                employs ResNet [47] for training to derive Ô¨Ånite-dimensional lifted ob-
+    The inÔ¨Ånite-dimensional Óâë is impossible to realize in applications,                                      servable functions. Residual blocks within the ResNet incorporate skip
+                                                                                                             connections, rendering the training process more stable compared to
+but can be truncated with a Ô¨Ånite-dimensional approximation [28].                                            fully connected layers. Matrices Ì†µÌ±® and Ì†µÌ±© are concurrently obtained dur-
+                                                                                                             ing the training process.
+Equation (5) can be simpliÔ¨Åed within Ô¨Ånite dimension space [33]:
+
+[              ] [ ][                                 Ì†µÌ±≤ Ì†µÌ±•Ì†µÌ±¢  ][ ]
+   Ì†µÌ≤õ(Ì†µÌ±ò + 1)            Ì†µÌ≤õ(Ì†µÌ±ò)           Ì†µÌ±≤ Ì†µÌ±•Ì†µÌ±•     Ì†µÌ±≤ Ì†µÌ±¢Ì†µÌ±¢       Ì†µÌ≤õ(Ì†µÌ±ò)
+   Ì†µÌ≤ñ(Ì†µÌ±ò + 1)  = Ì†µÌ±≤      Ì†µÌ≤ñ(Ì†µÌ±ò)  =        Ì†µÌ±≤ Ì†µÌ±¢Ì†µÌ±•                   Ì†µÌ≤ñ(Ì†µÌ±ò)                     (7)
+
+where Ì†µÌ≤õ(Ì†µÌ±ò) ‚àà ‚ÑùÌ†µÌ±õÌ†µÌ±ß is the approximation of embedding function Ì†µÌ≤àÌ†µÌ±•.                                        Assumption 3. The lifted observable functions are Lipschitz continuous,
+Ì†µÌ±≤ ‚àà ‚Ñù(Ì†µÌ±õÌ†µÌ±ß+Ì†µÌ±õ)√ó(Ì†µÌ±õÌ†µÌ±ß+Ì†µÌ±õ) is the Ô¨Ånite-dimensional approximation of Óâë. Ì†µÌ±≤Ì†µÌ±•Ì†µÌ±• ‚àà                              and the elements {Ì†µÌºëÌ†µÌ±ñ(Ì†µÌ≤ô(Ì†µÌ±ò))}Ì†µÌ†µÌ±ñÌ±õ=Ì†µÌ±ß1‚àí2Ì†µÌ±õ‚àí3 in the lifted observable functions,
+‚ÑùÌ†µÌ±õÌ†µÌ±ß√óÌ†µÌ±õÌ†µÌ±ß , Ì†µÌ±≤ Ì†µÌ±•Ì†µÌ±¢ ‚àà ‚ÑùÌ†µÌ±õÌ†µÌ±ß√óÌ†µÌ±õ, Ì†µÌ±≤ Ì†µÌ±¢Ì†µÌ±• ‚àà ‚ÑùÌ†µÌ±õ√óÌ†µÌ±õÌ†µÌ±ß and Ì†µÌ±≤ Ì†µÌ±¢Ì†µÌ±¢ ‚àà ‚ÑùÌ†µÌ±õ√óÌ†µÌ±õ are block matrices                  apart from the original states, are linearly independent.
+of Ì†µÌ±≤ .
+
+    Following the deÔ¨Ånition provided in Equation (7), let Ì†µÌ±≤Ì†µÌ±•Ì†µÌ±• = Ì†µÌ±® and                                        Before training DNN, by selecting appropriate activation functions
+Ì†µÌ±≤Ì†µÌ±•Ì†µÌ±¢ = Ì†µÌ±©. The evolution of the dynamical system within the lifted space                                   such as rectiÔ¨Åed linear units (ReLU) [48] that are Lipschitz continu-
+                                                                                                             ous, we can ensure the outputs of DNN are Lipschitz continuous. DNN
+is described as follows:                                                                                     is initialized with random weights during training, and as a result of
+                                                                                                             the training process, a highly complex mapping relationship emerges
+Ì†µÌ≤õ(Ì†µÌ±ò + 1) = Ì†µÌ±®Ì†µÌ≤õ(Ì†µÌ±ò) + Ì†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò)                                                               (8)           between the outputs and inputs, making it highly likely to satisfy the
+                                                                                                             condition of linear independence. Thus Assumption 3 can be satisÔ¨Åed.
+   Compared to Equation (7), Equation (8) oÔ¨Äers enhanced feasibility
+
+for subsequent controller design.
+
+   To reconstruct the original state space from the lifted space at time
+
+Ì†µÌ±ò, Ì†µÌ≤õ(Ì†µÌ±ò) is deÔ¨Åned as follows:
+
+          [    Ì†µÌ≤ô(Ì†µÌ±ò)    ]                                                                                   Assumption 4. The lifted observable functions are constructed such that
+             Ì†µÌ∫Ω(Ì†µÌ≤ô(Ì†µÌ±ò))                                                                                      Ì†µÌ≤õ(Ì†µÌøé2Ì†µÌ±õ+3) = Ì†µÌøéÌ†µÌ±õÌ†µÌ±ß .
+Ì†µÌ≤õ(Ì†µÌ±ò) =                                                                                       (9)
+
+                    [                        Ì†µÌºë2(Ì†µÌ≤ô(Ì†µÌ±ò))       ‚ãØ    Ì†µÌºëÌ†µÌ±õÌ†µÌ±ß‚àí2Ì†µÌ±õ‚àí3(Ì†µÌ≤ô(Ì†µÌ±ò)) ]‚ä§‚àà ‚ÑùÌ†µÌ±õÌ†µÌ±ß‚àí2Ì†µÌ±õ‚àí3         For the free-Ô¨Çoating space robot (2), there exists a feedback control
+where Ì†µÌ∫Ω(Ì†µÌ≤ô(Ì†µÌ±ò))= Ì†µÌºë1(Ì†µÌ≤ô(Ì†µÌ±ò))                                                                                law such that the system states are asymptotically stable at the origin,
+                                                                                                             denoted as Ì†µÌ≤ô ‚Üí Ì†µÌøé2Ì†µÌ±õ+3. Similarly, for the high-dimensional system (10),
+is the basis of the lifted space. Consequently, the state space is encap-                                    it is hypothesized that a feedback control law exists to guarantee the
+                                                                                                             asymptotic stability of all states at the origin.
+sulated within the lifted space, allowing for its reconstruction without
+                                                                                                                 The importance of Assumption 4 will be further elucidated in Sec-
+loss of accuracy through projection onto Ì†µÌ≤õ(Ì†µÌ±ò).                                                             tion 5.2.
+
+   Therefore, for the dynamics Equation (2), a globally linearized model                                         By employing activation functions such as the ReLU, centered at
+                                                                                                             zero, and setting biases within the neural network to zero, we adhere to
+in the lifted space is established as follows:                                                               Assumption 4 during the construction of the DNN architecture. There-
+                                                                                                             fore, diÔ¨Äerent from the DNN formulations presented in [49‚Äì51], this
+‚éßÌ†µÌ≤õ(Ì†µÌ±ò + 1) = Ì†µÌ±®Ì†µÌ≤õ(Ì†µÌ±ò) + Ì†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò)                                                                            paper opts to exclude biases in the DNN design. SpeciÔ¨Åcally, the expres-
+‚é™                                                                                                            sion for the ResNet adopted in this paper is delineated below:
+‚é®Ì†µÌ≤ôÌ†µÌºÉ(Ì†µÌ±ò) = Ì†µÌ±™1Ì†µÌ≤õ(Ì†µÌ±ò)                                                                          (10)
+
+‚é™‚é©Ì†µÌΩé0(Ì†µÌ±ò) = Ì†µÌ±™2Ì†µÌ≤õ(Ì†µÌ±ò)
+
+               [            Ì†µÌøéÌ†µ‚ä§Ì±õÌ†µÌ±ß ‚àí2Ì†µÌ±õ  ]‚ä§             [  Ì†µÌøé‚ä§2Ì†µÌ±õ  Ì†µÌøè‚ä§3    Ì†µÌøé‚ä§Ì†µÌ±õÌ†µÌ±ß‚àí2Ì†µÌ±õ‚àí3 ]‚ä§.
+where Ì†µÌ±™1 = Ì†µÌøè‚ä§2Ì†µÌ±õ                           ,
+                                                Ì†µÌ±™ 2  =
+
+   Let Ì†µÌ±ø ‚àà ‚Ñù(2Ì†µÌ±õ+3)√ó(Ì†µÌ±Ä‚àí1), Ì†µÌ±º ‚àà ‚ÑùÌ†µÌ±õ√ó(Ì†µÌ±Ä‚àí1), and Ì†µÌ≤Ä ‚àà ‚Ñù(2Ì†µÌ±õ+3)√ó(Ì†µÌ±Ä‚àí1) repre-                                ‚é™‚éßÌ†µÃÑÌ≤ö                  ((Ì†µÌ†µÃÑÃÑÌ±æÌ±æ     )
+                                                                                                             ‚é™Ì†µÃÑÌ≤ö                             0Ì†µ(Ì≤ô
+sent the datasets collected from the dynamics Equation (2), respectively:                                    ‚é™      0    =  Ì†µÌΩà  0             2 Ì†µÌΩà1      (Ì†µÃÑÌ±æ             )        ))
+                                                                                                                    1    =  Ì†µÌΩà  2                                               Ì†µÃÑÌ≤ö0
+   [                                            ]                                                                                                                   Ì†µÃÑÌ≤ö0     +
+Ì†µÌ±ø = Ì†µÌ≤ô(1) Ì†µÌ≤ô(2) ‚ãØ Ì†µÌ≤ô(Ì†µÌ±Ä ‚àí 1)                                                                                                                                    1
+
+   [                                            ]                                                            ‚é®‚ãÆ                     (Ì†µÃÑÌ±æ            (            (Ì†µÃÑÌ±æ               )                      ))  (15)
+Ì†µÌ±º = Ì†µÌ≤ñ(1) Ì†µÌ≤ñ(2) ‚ãØ Ì†µÌ≤ñ(Ì†µÌ±Ä ‚àí 1)                                                                                ‚é™‚é™Ì†µÃÑÌ≤ö                                   Ì†µÌΩà                   2Ì†µÃÑÌ±ô‚àí1 Ì†µÃÑÌ≤ö Ì†µÃÑÌ±ô‚àí1
+                                                                                               (11)                 Ì†µÃÑÌ±ô  =  Ì†µÌΩà2Ì†µÃÑÌ±ô            2Ì†µÃÑÌ±ô       2Ì†µÃÑÌ±ô‚àí1                             +  Ì†µÃÑÌ≤ö  Ì†µÃÑÌ±ô‚àí1
+
+   [                                      ]                                                                  ‚é©‚é™Ì†µÌ∫Ω = Ì†µÃÑÌ±æ 2Ì†µÃÑÌ±ô+1Ì†µÃÑÌ≤öÌ†µÃÑÌ±ô
+Ì†µÌ≤Ä = Ì†µÌ≤ô(2) Ì†µÌ≤ô(3) ‚ãØ Ì†µÌ≤ô(Ì†µÌ±Ä)
+
+where Ì†µÌ≤ô(Ì†µÌ±ñ) and Ì†µÌ≤ñ(Ì†µÌ±ñ) respectively denote the system states at time Ì†µÌ±ñ and                                 where Ì†µÃÑÌ±ô denotes the number of Residual blocks within the ResNet ar-
+                                                                                                             chitecture. {Ì†µÌ±æÃÑ Ì†µÌ±ñ}2Ì†µÌ±ñ=Ì†µÃÑÌ±ô+01 and {Ì†µÌΩàÌ†µÌ±ñ}Ì†µ2Ì±ñ=Ì†µÃÑÌ±ô 0 denote the weights and activation
+the corresponding control inputs.                                                                            functions associated with the Resnet. {Ì†µÃÑÌ≤öÌ†µÌ±ñ}Ì†µÌ†µÃÑÌ±ñÌ±ô=0 denotes the outputs corre-
+                                                                                                             sponding to each transformation within the speciÔ¨Åed range.
+    The original system states collected are mapped to the lifted space,
+represented by the matrices Ì†µÌº£ ‚àà ‚ÑùÌ†µÌ±õÌ†µÌ±ß√ó(Ì†µÌ±Ä‚àí1) and Ì†µÌº¥ ‚àà ‚ÑùÌ†µÌ±õÌ†µÌ±ß√ó(Ì†µÌ±Ä‚àí1):                                             The DNN hyperparameters for the simulations in Section 5 are de-
+                                                                                                             tailed in Table 3 in Section 5.1.
+   [                                            ]
+Ì†µÌº£ = Ì†µÌ≤õ(1) Ì†µÌ≤õ(2) ‚ãØ Ì†µÌ≤õ(Ì†µÌ±Ä ‚àí 1)
+
+   [                                      ]                                                    (12)
+Ì†µÌº¥ = Ì†µÌ≤õ(2) Ì†µÌ≤õ(3) ‚ãØ Ì†µÌ≤õ(Ì†µÌ±Ä)
+
+                                                                                                          5
+R. Mao, T. Meng, K. Wang et al.                                                                     Aerospace Science and Technology 154 (2024) 109515
+
+                                                       Fig. 3. Framework of training DK using DNN.
+
+    To train the DK, it is necessary to collect data using the dynamical               Following the training of DNN, a linearized model of the free-Ô¨Çoating
+model (2), obtaining a series of state trajectories by applying random             space robot (3) in the lifted space can be obtained:
+control inputs. Each state trajectory comprises a sequence of state-input
+pairs evolving over time. Consequently, in the construction of the loss            Ì†µÌ≤õ(Ì†µÌ±ò + 1) = (Ì†µÌ±® + ŒîÌ†µÌ±®)Ì†µÌ≤õ(Ì†µÌ±ò) + (Ì†µÌ±© + ŒîÌ†µÌ±©)Ì†µÌ≤ñ(Ì†µÌ±ò) + Ì†µÌ≤Ö(Ì†µÌ±ò)
+function during the training process, a multi-step prediction format can                                                                                                    (20)
+be adopted to enhance the training eÔ¨Äectiveness.
+                                                                                             = Ì†µÌ±®Ì†µÌ≤õ(Ì†µÌ±ò) + Ì†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò) + ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) + Ì†µÌºπ(Ì†µÌ±ò) + Ì†µÌ≤Ö(Ì†µÌ±ò)
+    Assume that the system states at time Ì†µÌ±ò are represented by Ì†µÌ≤ô(Ì†µÌ±ò),
+with control inputs denoted as Ì†µÌ≤ñ(Ì†µÌ±ò), and the states in the lifted space          where ŒîÌ†µÌ±® and ŒîÌ†µÌ±© represent approximation errors arising inevitably
+are given by Ì†µÌ≤õ(Ì†µÌ±ò). The prediction of the system states in the lifted space       from the truncation of the original nonlinear system into a Ô¨Ånite-
+after Ì†µÌ±Ü steps can be denoted as:                                                  dimensional linear space during the training of DNN. A portion of these
+                                                                                   approximation errors is associated with Ì†µÌ≤õ(Ì†µÌ±ò), thus, the uncertainty is
+      ‚àëÌ†µÌ±Ü                                                                          depicted in the form of ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)), while another segment of the approx-
+Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±Ü) = Ì†µÌ±®Ì†µÌ±Ü Ì†µÌ≤õ(Ì†µÌ±ò) + Ì†µÌ±®Ì†µÌ±Ü‚àíÌ†µÌ±ñÌ†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ ‚àí 1)                              imation errors is represented by Ì†µÌºπ(Ì†µÌ±ò). Ì†µÌ≤Ö(Ì†µÌ±ò) denotes the expression of the
+                                                       (16)                        disturbances to the original dynamical model within the lifted space.
+
+      Ì†µÌ±ñ=1                                                                         Assumption 5. In Equation (20), the uncertainties represented by
+                                                                                   ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)), Ì†µÌºπ(Ì†µÌ±ò), Ì†µÌ≤Ö(Ì†µÌ±ò), and their derivatives, are bounded.
+    The loss function selected in this paper is mainly composed of two
+parts. The Ô¨Årst part is the prediction error function of the system in the             The boundedness of external disturbances in the lifted space can be
+lifted space, which refers to the error of the system‚Äôs prediction Ì†µÌ±Ü steps        derived from Assumption 2. The boundedness of approximation error
+after time Ì†µÌ±ò, and can be deÔ¨Åned as:                                               from modeling the nonlinear system to the high-dimensional linearized
+                                                                                   system can be addressed through the design of DNN and the training
+‚àëÌ†µÌ±Ü                                                                                process. As analyzed in [53], the operation of concatenating the original
+Óà∏1 = ‚ÄñÌ†µÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ) ‚àí Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ)‚Äñ22                                                states of the system with the lifted observable functions produced by
+                                                       (17)                        DNN yields a high data utilization rate. The DNN component can be
+                                                                                   regarded as compensating for the residuals in the transformation from
+Ì†µÌ±ñ=1                                                                               a nonlinear system to a linearized system.
+
+    The second part is the prediction error of the original system states.         4. Controller design
+Although we have collected states regarding the manipulator‚Äôs joint an-
+gles, joint angular velocities and base satellite angular velocities, the              This section utilizes the high-dimensional approximate linearization
+design of the subsequent controller focuses more on the restoration of             model (20) obtained from the previous section based on DK to design
+the manipulator‚Äôs joint angles and angular velocities. Therefore, this             the controller for the free-Ô¨Çoating space robot. Initially, an RBFNN-DO
+portion of the loss function can be deÔ¨Åned as:                                     is designed to estimate both internal and external disturbances, and then
+                                                                                   embeds the estimation of disturbances within the framework of the MPC.
+‚àëÌ†µÌ±Ü                                                                                Subsequently, a cost function with a decay factor is devised to suppress
+Óà∏2 = ‚ÄñÌ†µÌ≤ôÌ†µÌºÉ(Ì†µÌ±ò + Ì†µÌ±ñ) ‚àí Ì†µÌ±™1Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ)‚Äñ22                                           base attitude disturbance while ensuring precision in tracking the joint
+                                                       (18)                        angles of the manipulator.
+
+Ì†µÌ±ñ=1                                                                                   The structure of the proposed method is illustrated in Fig. 4. First,
+                                                                                   we employ the free-Ô¨Çoating space robot (2) to collect data (11). It is es-
+    The training objective of the DNN is to minimize the following loss            sential that the datasets encompass a diverse range. Next, these datasets
+function:                                                                          are employed to train the linearization DK model (10) oÔ¨Ñine using the
+                                                                                   DNN (15). In the online control phase, we utilize the RBFNN-DO as
+Óà∏ = Ì†µÌªº1Óà∏1 + Ì†µÌªº2Óà∏2 + Ì†µÌªº3‚ÄñÌ†µÌºΩÌ†µÃÑÌ±ä ‚Äñ22                      (19)                        described in (23) and (30) to address both internal and external dis-
+                                                                                   turbances. These components are integrated into our proposed Œì-MPC
+where Ì†µÌªº1, Ì†µÌªº2 and Ì†µÌªº3 are the positive hyperparameters corresponding to
+diÔ¨Äerent parts of the loss function. ‚ÄñÌ†µÌºΩÌ†µÃÑÌ±ä ‚Äñ22 represents the Ì†µÌ±ô2 regulariza-
+tion term, used to prevent overÔ¨Åtting.
+
+The gradient descent Adam [52] optimizing algorithm is used for
+
+training the DNN.
+
+    In the training stage, we usually choose a smaller Ì†µÌªº3 than Ì†µÌªº1 and
+Ì†µÌªº2. The hyperparameters for the training process of the DNN (15) in
+Section 5.2 are detailed in Table 3 in Section 5.1.
+
+                                                                                6
+R. Mao, T. Meng, K. Wang et al.                                                                                                                      Aerospace Science and Technology 154 (2024) 109515
+
+                                                                                Fig. 4. Structure of the proposed method.
+
+(35) framework. The Œì-MPC leverages the linearized model from the DK                                               The updating law is designed as:
+transformation and the disturbance compensation from the RBFNN-DO
+to formulate a constrained optimal control strategy.                                                          Ì†µÃÇÌ±æ (Ì†µÌ±ò + 1) = Ì†µÃÇÌ±æ (Ì†µÌ±ò) + Ì†µÌºÇÌ†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))Ì†µÌΩÉ‚ä§(Ì†µÌ±ò + 1) ‚àí Ì†µÌªæÌ†µÃÇÌ±æ (Ì†µÌ±ò)                                         (26)
+
+4.1. Design of RBFNN-DO                                                                                       where Ì†µÌºÇ is a positive coeÔ¨Écient to be chosen, denoting the learning rate
+                                                                                                              of RBFNN. Ì†µÌªæ is a small positive coeÔ¨Écient, used to modify the updating
+      Inspired by the discrete system DO designed in [54], this paper                                         law.
+
+adopts RBFNN to approximate the uncertainty term ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) associ-                                             To estimate the integrated disturbances in Equation (24), deÔ¨Åne a
+                                                                                                              virtual variable:
+ated with Ì†µÌ≤õ(Ì†µÌ±ò) in Equation (20). Select the Gaussian function of the
+
+following form:                                                                                               Ì†µÌ±∑ (Ì†µÌ±ò) = Ì†µÌ±´(Ì†µÌ±ò) ‚àí Ì†µÌªºÌ†µÌ≤õ(Ì†µÌ±ò)                                                                            (27)
+
+                        (    ‚ÄñÌ†µÌ≤õ(Ì†µÌ±ò) ‚àí Ì†µÌºª  Ì†µÌ±ñ ‚Äñ22  )
+                          ‚àí       2‚ÑèÌ†µ2Ì±ñ
+Ì†µÌ∞∫Ì†µÌ±ñ  (Ì†µÌ≤õ(Ì†µÌ±ò))  =  exp                                Ì†µÌ±ñ = 1, 2, ‚ãØ , Ì†µÌ±ô                     (21)              where Ì†µÌªº is a positive coeÔ¨Écient to be chosen.
+                                                                                                                  The RBFNN-DO hyperparameters for the simulations in Section 5 are
+where Ì†µÌºªÌ†µÌ±ñ ‚àà ‚ÑùÌ†µÌ±õÌ†µÌ±ß is the center of each Gaussian function. ‚ÑèÌ†µÌ±ñ is the width of
+                                                                                                              detailed in Table 4 in Section 5.1.
+each Gaussian function. Ì†µÌ±ô denotes the number of Gaussian functions used                                          According to Equation (24) and Equation (27):
+
+t[o form the activation       ,GÌ†µÌ∞∫aÌ†µÌ±ôu(Ì†µsÌ≤õs(Ì†µiÌ±òa)n) ]f‚ä§u.nction  Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))  ‚àà  ‚ÑùÌ†µÌ±ô ,  and  Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))  =     Ì†µÌ±∑ (Ì†µÌ±ò + 1) = Ì†µÌ±´(Ì†µÌ±ò + 1)
+ Ì†µÌ∞∫1(Ì†µÌ≤õ(Ì†µÌ±ò)), Ì†µÌ∞∫2(Ì†µÌ≤õ(Ì†µÌ±ò)), ‚ãØ
+                                                                                                                                  (                                                                        )
+                                                                                                                               ‚àí Ì†µÌªº Ì†µÌ±®Ì†µÌ≤õ(Ì†µÌ±ò) + Ì†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò) + Ì†µÌ±æ ‚àó‚ä§(Ì†µÌ±ò)Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò)) + Ì†µÌ±∑ (Ì†µÌ±ò) + Ì†µÌªºÌ†µÌ≤õ(Ì†µÌ±ò) (28)
+      Thus, the uncertainty ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) can be presented as:
+
+ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) = Ì†µÌ±æ ‚àó‚ä§(Ì†µÌ±ò)Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò)) + Ì†µÌº∫‚àó(Ì†µÌ≤õ(Ì†µÌ±ò))                                            (22)                   The estimation of Ì†µÌ±∑ (Ì†µÌ±ò + 1) is designed as:
+
+where Ì†µÌ±æ ‚àó(Ì†µÌ±ò) ‚àà ‚ÑùÌ†µÌ±ô√óÌ†µÌ±õÌ†µÌ±ß is the optimal weights matrix of RBFNN, Ì†µÌº∫‚àó(Ì†µÌ≤õ(Ì†µÌ±ò))                                 Ì†µÃÇÌ±∑  (Ì†µÌ±ò  +  1)  =  ‚àíÌ†µÌªº  (          +  Ì†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò)  +  Ì†µÃÇÌ±æ  ‚ä§  (Ì†µÌ±ò)Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))  +  Ì†µÃÇÌ±∑  (Ì†µÌ±ò)  +        )   (29)
+is the approximation error.                                                                                                             Ì†µÌ±®Ì†µÌ≤õ(Ì†µÌ±ò)                                                           Ì†µÌªºÌ†µÌ≤õ(Ì†µÌ±ò)
+
+    The uncertainty ŒîÌ†µÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) can be estimated as:                                                         where Ì†µÃÇÌ±∑ (Ì†µÌ±ò) is the estimation of Ì†µÌ±∑ (Ì†µÌ±ò).
+                                                                                                                  Thus Ì†µÌ±´(Ì†µÌ±ò) can be estimated as:
+ŒîÌ†µÃÇÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) = Ì†µÃÇÌ±æ ‚ä§(Ì†µÌ±ò)Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))
+                                                                                            (23)              Ì†µÃÇÌ±´(Ì†µÌ±ò) = Ì†µÃÇÌ±∑ (Ì†µÌ±ò) ‚àí Ì†µÌªºÌ†µÌ≤õ(Ì†µÌ±ò)                                                                          (30)
+
+where Ì†µÃÇÌ±æ (Ì†µÌ±ò) is the estimation of Ì†µÌ±æ ‚àó(Ì†µÌ±ò).                                                                     By integrating Equation (23) and Equation (30) to substitute for the
+    The model Equation (20) can be rewritten as:                                                              uncertainties in Equation (20), the nominal system for the subsequently
+                                                                                                              controller design is:
+Ì†µÌ≤õ(Ì†µÌ±ò + 1) = Ì†µÌ±®Ì†µÌ≤õ(Ì†µÌ±ò) + Ì†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò) + Ì†µÃÇÌ±æ ‚ä§(Ì†µÌ±ò)Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò)) ‚àí Ì†µÃÉÌ±æ ‚ä§(Ì†µÌ±ò)Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò)) + Ì†µÌ±´(Ì†µÌ±ò) (24)
+                                                                                                              Ì†µÃÇÌ≤õ(Ì†µÌ±ò + 1) = Ì†µÌ±®Ì†µÌ≤õ(Ì†µÌ±ò) + Ì†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò) + ŒîÌ†µÃÇÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) + Ì†µÃÇÌ±´(Ì†µÌ±ò)                                            (31)
+where Ì†µÌ±´(Ì†µÌ±ò) = Ì†µÌº∫‚àó(Ì†µÌ≤õ(Ì†µÌ±ò)) + Ì†µÌºπ(Ì†µÌ±ò) + Ì†µÌ≤Ö(Ì†µÌ±ò), Ì†µÃÉÌ±æ (Ì†µÌ±ò) = Ì†µÃÇÌ±æ (Ì†µÌ±ò) ‚àí Ì†µÌ±æ ‚àó(Ì†µÌ±ò).
+    To apply RBFNN, it is necessary to design an updating law to esti-                                        Lemma 1. [55] For system (20), if there exists a positive deÔ¨Åned function
+
+mate the weights at the next time step. Unlike the trajectory tracking                                        Ì†µÌ±â (Ì†µÌ≤ô(Ì†µÌ±ò)) with continuous partial diÔ¨Äerences such that for Ì†µÌ≤ô(Ì†µÌ±ò) in a compact
+error-based updating law used in [54], this paper takes into account                                          set Œ©Ì†µÌ±• ‚äÜ ‚ÑùÌ†µÌ±õ, ŒîÌ†µÌ±â (Ì†µÌ≤ô(Ì†µÌ±ò)) is negative for ‚ÄñÌ†µÌ≤ô(Ì†µÌ±ò)‚Äñ2 > Ì†µÌ∞∂. And the ball of radius
+that the errors resulting from Koopman operator modeling mainly stem                                          C is contained in Œ©Ì†µÌ±•, the system is uniformly ultimately bounded (UUB) and
+from model uncertainty. Therefore, a model error-driven weight updat-                                         the norm of the states of the system is bounded within a neighborhood of C.
+ing law is adopted. DeÔ¨Åne a variable:
+
+Ì†µÌΩÉ(Ì†µÌ±ò) = Ì†µÌ≤õ(Ì†µÌ±ò) ‚àí Ì†µÃÇÌ≤õ(Ì†µÌ±ò)                                                                   (25)              Theorem 1. Considering the closed-loop system (20), with the neural net-
+                                                                                                              work employing the weights updating law (26), and the internal and external
+where Ì†µÃÇÌ≤õ(Ì†µÌ±ò) is the estimation of Ì†µÌ≤õ(Ì†µÌ±ò).
+
+                                                                                                           7
+R. Mao, T. Meng, K. Wang et al.                                                                                                                                     Aerospace Science and Technology 154 (2024) 109515
+
+disturbances estimated by Equation (23) and Equation (30) respectively, then                                                     bounded, and in the Ô¨Ånite prediction horizon, for each ‚ÄñÌ†µÌ≤ò(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)‚Äñ2(Ì†µÌ±ñ =
+the estimation error of the disturbances in system (20) is UUB.                                                                  0, 1, ‚ãØ , Ì†µÌ±ÅÌ†µÌ±ù), satisÔ¨Åes ‚ÄñÌ†µÌ≤ò(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)‚Äñ2 ‚©Ω Ì†µÌª∂ . The error between nominal sys-
+
+                                                                                                                                 tem (31) and true system (20) is bounded in:
+
+Proof. The proof of Theorem 1 can be seen in Appendix A. ‚ñ°                                                                       ‚ÄñÌ†µÃÇÌ≤õ(Ì†µÌ±ò + 1|Ì†µÌ±ò) ‚àí Ì†µÌ≤õ(Ì†µÌ±ò + 1)‚Äñ2 = ‚ÄñÌ†µÌ≤ò‚Äñ2 ‚©Ω Ì†µÌª∂
+
+4.2. Design of MPC                                                                                                               ‚ÄñÌ†µÃÇÌ≤õ(Ì†µÌ±ò + 2|Ì†µÌ±ò) ‚àí Ì†µÌ≤õ(Ì†µÌ±ò + 2)‚Äñ2 = Ì†µÌ±®‚ÄñÌ†µÌ≤ò‚Äñ2 + ‚ÄñÌ†µÌ≤ò(Ì†µÌ±ò + 1|Ì†µÌ±ò)‚Äñ2 ‚©Ω (Ì†µÌ±® + Ì†µÌ∞àÌ†µÌ±õÌ†µÌ±ß )Ì†µÌª∂
+
+    The objective of the controller design is to enable the free-Ô¨Çoating                                                         ‚ãÆ                                                                               (36)
+space robots (3) to track a time-varying reference trajectory Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì ‚àà ‚Ñù2Ì†µÌ±õ,
+with a priority on tracking accuracy, while minimizing the base satellite                                                        ‚ÄñÌ†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò) ‚àí  Ì†µÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ)‚Äñ2    ‚àë Ì†µÌ±ñ‚àí1   =  Ì†µÌ±®Ì†µÌ±ñ ‚àí Ì†µÌ∞àÌ†µÌ±õÌ†µÌ±ß  Ì†µÌª∂
+attitude disturbance.                                                                                                                                               ‚©Ω Ì†µÌ±®Ì†µÌ±ó Ì†µÌª∂     Ì†µÌ±® ‚àí Ì†µÌ∞àÌ†µÌ±õÌ†µÌ±ß
+
+    DiÔ¨Äerent from the approach utilized in [41], which uses a Ô¨Åxed                                                                                                     Ì†µÌ±ó=0
+weight to handle the base satellite attitude disturbance while tracking a
+Ô¨Åxed reference trajectory, this paper advocates for the implementation                                                              Theorem 2 has been proven. ‚ñ°
+of a decay factor. This factor engenders a modiÔ¨Åable balance between
+precision of tracking a time-varying reference trajectory and the reduc-                                                             Several assumptions related to the optimization problem (35) are
+tion of base satellite attitude disturbance. The decay factor‚Äôs role is to                                                       stated in the following for the analysis of closed stability [56]:
+suppress the base satellite attitude disturbance induced by the manipula-
+tor when the joint angles converge towards their targets. Concurrently,                                                          Assumption 6. The stage cost function Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)) is Lip-
+once the control target for joint angles is achieved, the focus shifts pri-                                                      schitz continuous with a Lipschitz constant Ì†µÌ∞øÌ†µÌ±é, an(d there exists )a Óà∑‚àû
+marily to maintaining tracking precision. This approach helps prevent a                                                          function Ì†µÌ±é1, such that Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)) ‚©æ Ì†µÌ±é1 ‚ÄñÌ†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)‚Äñ2 .
+potential decline in precision of tracking a time-varying reference trajec-
+tory, which might occur when attempting to optimize the base satellite                                                           Assumption 7. The terminal cost function Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò)) is Lipschitz
+attitude disturbance simultaneously.                                                                                             continuous with a Lipschitz constan(t Ì†µÌ∞øÌ†µÌ±è, and there e)xists a Óà∑‚àû function
+                                                                                                                                 Ì†µÌ±é2, such that Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò)) ‚©æ Ì†µÌ±é2 ‚ÄñÌ†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò)‚Äñ2 .
+    To quantify tracking performance, we introduce a variable Ì†µÌºì(Ì†µÌ±ò) =
+‚ÄñÌ†µÌ±™1Ì†µÌ≤õ(Ì†µÌ±ò) ‚àí Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì (Ì†µÌ±ò)‚Äñ22. Then, the decay factor is deÔ¨Åned as:                                                              Assumption 8. There exists a local stabilizing controller Ì†µÌΩÅ(Ì†µÌ±ò) for termi-
+                                                                                                                                 nal set such that Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + 1)) ‚àí Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò)) ‚©Ω Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò), Ì†µÌΩÅ(Ì†µÌ±ò)).
+          ‚éß0     (     Ì†µÌºì (Ì†µÌ±ò)‚àíÌ†µÌºìmin     )      0 ‚©Ω Ì†µÌºì(Ì†µÌ±ò) ‚©Ω Ì†µÌºìmin
+          ‚é™            Ì†µÌºìmax ‚àíÌ†µÌºì (Ì†µÌ±ò)           Ì†µÌºìmin < Ì†µÌºì(Ì†µÌ±ò) < Ì†µÌºìmax                                                           Lemma 2. [57] Given the system Ì†µÌ≤ô(Ì†µÌ±ò + 1) = Ì†µÌ≤á (Ì†µÌ≤ô(Ì†µÌ±ò), Ì†µÌ≤ò(Ì†µÌ±ò)), if there ex-
+Œì(Ì†µÌ±ò)  =  ‚é®tanh                                 Ì†µÌºìmax ‚©Ω Ì†µÌºì(Ì†µÌ±ò)                                                     (32)          ists a positive deÔ¨Å(ned func)tion Ì†µÌ±â (Ì†µÌ≤ô(Ì†µÌ±ò), Ì†µÌ≤ò(Ì†µÌ±ò)), and(Óà∑‚àû func)tion Ì†µÌ±é3, Ì†µÌ±é4, Ì†µÌ±é5,
+          ‚é©‚é™1                                                                                                                    Ì†µÌ±é6, such that Ì†µÌ±é3 ‚ÄñÌ†µÌ≤ô(Ì†µÌ±ò)‚Äñ2 ‚©Ω Ì†µÌ±â (Ì†µÌ≤ô(Ì†µÌ±ò(), Ì†µÌ≤ò(Ì†µÌ±ò)) ‚©Ω)Ì†µÌ±é4 ‚Äñ(Ì†µÌ≤ô(Ì†µÌ±ò)‚Äñ2 a)nd Ì†µÌ±â (Ì†µÌ≤ô(Ì†µÌ±ò +
+                                                                                                                                 1), Ì†µÌ≤ò(Ì†µÌ±ò + 1)) ‚àí Ì†µÌ±â (Ì†µÌ≤ô(Ì†µÌ±ò), Ì†µÌ≤ò(Ì†µÌ±ò)) ‚©Ω ‚àíÌ†µÌ±é5 ‚ÄñÌ†µÌ≤ô(Ì†µÌ±ò)‚Äñ2 + Ì†µÌ±é6 ‚ÄñÌ†µÌ≤ò(Ì†µÌ±ò)‚Äñ2 , the system
+where Ì†µÌºìmin and Ì†µÌºìmax are positive coeÔ¨Écients to be designed.                                                                    is input-to-state stable (ISS).
+    Within the framework of MPC, the cost function for each stage and
+
+the terminal cost function of our Œì-MPC are deÔ¨Åned as:
+
+Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)) = ‚ÄñÌ†µÌ±™1Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò) ‚àí Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì (Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)‚Äñ2Ì†µÌ±∏1                                           Theorem 3. Considering the system (20) controlled by the proposed Œì-MPC
+                                                                                                                                 strategy (35), and the RBFNN-DO (23) and (30) are employed, the system
+                                         + Œì(Ì†µÌ±ò)‚ÄñÌ†µÌ±™2Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)‚Äñ2Ì†µÌ±∏2 + ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)‚Äñ2Ì†µÌ±π (33)                              is ISS.
+
+Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò)) = ‚ÄñÌ†µÌ±™1Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò) ‚àí Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì (Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò)‚ÄñÌ†µ2Ì±∏Ì†µÌ±Å                                   (34)          Proof. The proof of Theorem 3 can be seen in Appendix B. ‚ñ°
+
+where Ì†µÌ±ÅÌ†µÌ±ù denotes the prediction horizon. Ì†µÌ±∏1 ‚àà ‚Ñù2Ì†µÌ±õ√ó2Ì†µÌ±õ, Ì†µÌ±∏2 ‚àà ‚Ñù3√ó3,                                                           5. Simulations
+Ì†µÌ±∏Ì†µÌ±Å ‚àà ‚Ñù2Ì†µÌ±õ√ó2Ì†µÌ±õ, Ì†µÌ±π ‚àà ‚ÑùÌ†µÌ±õ√óÌ†µÌ±õ denote weights respectively.
+                                                                                                                                 5.1. Simulation settings
+    The Œì-MPC hyperparameters for the simulations in Section 5 are de-
+
+tailed in Table 4 in Section 5.1.
+
+Considering the system (20), integrating the RBFNN-DO (23) and                                                                       In this section, the eÔ¨Écacy of the proposed method is evaluated
+                                                                                                                                 using a 5-DOF micro-nano free-Ô¨Çoating space robot, as depicted in
+(30), along with the designed state cost function (33) and terminal cost                                                         Fig. 5 [58]. The Denavit-Hartenberg (DH) parameters and the kine-
+                                                                                                                                 matic and dynamic parameters of this system are delineated in Ta-
+function (34), the optimization problem of Œì-MPC can be described as                                                             ble 2. The joint torque limitations for each joint are constrained with
+                                                                                                                                 Ì†µÌ±¢Ì†µmÌºÑ in = ‚àí5Nm(Ì†µÌºÑ = 1, 2, ‚ãØ, 5) and Ì†µÌ±¢mÌ†µÌºÑ ax = 5Nm(Ì†µÌºÑ = 1, 2, ‚ãØ, 5). The sampling
+follows:                                                                                                                         time is chosen as ŒîÌ†µÌ±á = 0.01s. The oÔ¨Ñine learning is carried out in
+                                                                                                                                 Python 3.8.18 and the online controller is conducted in Matlab R2021b,
+minÌ†µÌ∞Ω   (Ì†µÌ±ò)  =  Ì†µÌ∞øÌ†µÌ±ì  (Ì†µÃÇÌ≤õ(Ì†µÌ±ò  +  Ì†µÌ±ÅÌ†µÌ±ù  |Ì†µÌ±ò))  +  Ì†µ‚àë Ì±ÅÌ†µÌ±ù ‚àí1  Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò))                                running on a computer with Intel Core i9-12900H 2.50 GHz and 16.0 GB
+                                                                                                                                 RAM. The hyperparameters selected for the simulations in this paper
+Ì†µÌ≤ñ(Ì†µÌ±ò)                                             Ì†µÌ±ñ=0                                                                          are shown in Table 3 and Table 4.
+
+              ‚éßÌ†µÃÇÌ≤õ(Ì†µÌ±ò) = Ì†µÌ≤õ(Ì†µÌ±ò)
+              ‚é™
+subject   to  ‚é®Ì†µÃÇÌ≤õ(Ì†µÌ±ò   +  Ì†µÌ±ñ   +  1|Ì†µÌ±ò)  =  Ì†µÌ±®Ì†µÃÇÌ≤õ(Ì†µÌ±ò  +      Ì†µÌ±ñ|Ì†µÌ±ò)  +  Ì†µÌ±©Ì†µÌ≤ñ(Ì†µÌ±ò  +  Ì†µÌ±ñ|Ì†µÌ±ò)  +  ŒîÌ†µÃÇÌ±≠  (Ì†µÌ≤õ(Ì†µÌ±ò))  +  Ì†µÃÇÌ±´  (Ì†µÌ±ò)
+
+              ‚é©‚é™Ì†µÌ±¢Ì†µmÌºÑ in ‚©Ω Ì†µÌ±¢Ì†µÌºÑ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò) ‚©Ω Ì†µÌ±¢Ì†µmÌºÑ ax Ì†µÌºÑ = 1, 2, ‚ãØ , Ì†µÌ±õ
+
+                                                                                                                   (35)          5.2. Training and prediction evaluation
+
+where     Ì†µÌ±¢Ì†µmÌºÑ in and  Ì†µjÌ±¢omÌ†µÌºÑ ianxt,dÌ†µeÌ±¢Ì†µnÌºÑ doteentohteeslothweercobnoturnodl  and upper bound of control                          In this subsection, an oÔ¨Ñine DK model for the free-Ô¨Çoating space
+inputs    for each                                                               input of the Ì†µÌºÑ-th joint.                       robot is constructed using DNN.
+
+Theorem 2. The norm of the prediction errors within the optimization prob-                                                           The datasets are generated through several trajectories, each com-
+lem (35) between the true system (20) and the nominal system (31), are                                                           prising 100 steps (1s), in the MATLAB environment using Equation (2)
+bounded.                                                                                                                         via the Runge-Kutta method. We collect input and output data of the
+                                                                                                                                 free-Ô¨Çoating space robot in Section 5.1 without considering the un-
+Proof. According to Therorem 1 and Assumption 5, by selecting ap-                                                                derlying structure of the model (1). The datasets should encompass a
+propriate parameters, the estimation error Ì†µÌ≤ò(Ì†µÌ±ò) = ŒîÌ†µÃÉÌ±≠ (Ì†µÌ≤õ(Ì†µÌ±ò)) + Ì†µÃÉÌ±´(Ì†µÌ±ò) is                                                   diverse range of joint torques to form the basis for subsequent DK model
+
+                                                                                                                              8
+R. Mao, T. Meng, K. Wang et al.                                                                                                                                         Aerospace Science and Technology 154 (2024) 109515
+
+                          Fig. 5. Simulation model.                                                                  Fig. 6. Training loss of the DK.
+
+Table 2
+Parameters of the space robot.
+
+                          ÓàÆ0       Óà∂1      Óà∂2                 Óà∂3           Óà∂4                Óà∂5              Ì†µÌ≤õÌ†µÌ∞∏ (Ì†µÌ≤ô) = [ Ì†µÌ≤ô‚ä§, Ì†µÌºëÌ†µÌ∞∏1(Ì†µÌ≤ô) ‚ãØ Ì†µÌºëÌ†µÌ∞∏17(Ì†µÌ≤ô) ]‚ä§
+                                                                                                                   Ì†µÌ±ñ(Ì†µÌ≤ô)‚àí=[‚ÄñÌ†µÌøéÌ†µ1‚ä§Ì≤ô3‚àí, Ì†µÌºëÌ†µÌΩáÌ†µÌ†µÌ∞∏Ì±ñ‚Äñ1(22Ì†µÌ†µÌøéÌ±ô1Ì†µÌ±ú3Ì†µÌ±î)(‚Äñ‚ãØÌ†µÌ≤ô ‚àí  Ì†µÌºëÌ†µÌ∞∏17(Ì†µÌøé13) ]‚ä§
+Mass (kg)                 50       2       2                  2            2                 2                                                                          Ì†µÌΩáÌ†µÌ±ñ‚Äñ22) Ì†µÌ±ñ = 1,                (37)
+                          2        0.2     0.2                0.2          0.2               0.2
+Inertia Ì†µÌ∞ºÌ†µÌ±•Ì†µÌ±• (kg ‚ãÖ m2)  1        0.1     0.1                0.1          0.1               0.1             Ì†µÌºëÌ†µÌ∞∏                                                                         2,  ‚ãØ  ,  17
+Inertia Ì†µÌ∞ºÌ†µÌ±¶Ì†µÌ±¶ (kg ‚ãÖ m2)  3        0.3     0.3                0.3          0.3               0.3
+Inertia Ì†µÌ∞ºÌ†µÌ±ßÌ†µÌ±ß (kg ‚ãÖ m2)  -        0.125   0                  0            0                 0.15            where Ì†µÌ≤õÌ†µÌ∞∏ (Ì†µÌ≤ô) ‚àà ‚Ñù30 is the embedding function of EDMD, Ì†µÌºëÌ†µÌ∞∏Ì†µÌ±ñ(Ì†µÌ≤ô)(Ì†µÌ±ñ =
+DH.Ì†µÌ±ë(m)                  -        Ì†µÌºã‚àï2    0                  0            Ì†µÌºã‚àï2              ‚àíÌ†µÌºã‚àï2           1, 2, ‚ãØ , 17) represent the basis functions of the lifted space in EDMD
+                          -        0       0.1515             0.1420       0                 0
+DH.Ì†µÌªº (rad)               -        0       1.2553             -1.2553      Ì†µÌºã‚àï2              ‚àíÌ†µÌºã‚àï2           and Ì†µÌΩáÌ†µÌ±ñ ‚àà ‚Ñù13(Ì†µÌ±ñ = 1, 2, ‚ãØ , 17) are kernel centers, each element of Ì†µÌΩáÌ†µÌ±ñ is
+                          0        0       0.0871             0.0710       0                 0.035           chosen randomly in [‚àí0.1, 0.1].
+DH.Ì†µÌ±é(m)                  0        0.0625  0.0223             0            0                 0
+                          0.05     0       0                  0            -0.04             0                     The trained models with DK and EDMD are validated with the same
+DH.Ì†µÌºÉ (rad)
+Ì†µÌ≤ÉÌ†µÌ±• (m)
+Ì†µÌ≤ÉÌ†µÌ±¶ (m)
+Ì†µÌ≤ÉÌ†µÌ±ß (m)
+
+                                                                                                             training datasets. Fig. 8 illustrates the predictive performance of DK and
+
+                                                                                                             EDMD.
+
+Table 3                                                                                                            The relative root mean square error (RRMSE) is used to evaluate the
+Hyperparameters of the DK.
+                                                                                                             performances of DK and EDMD:
+            hyperparameter
+                                                         value                                               RRMSE = ‚àö‚àëÌ†µÌ†µÌ±òÌ±á‚àö=‚àï1Œî‚àëÌ†µÌ±á Ì†µÌ†µ‚ÄñÌ±òÌ±á=Ì†µ‚àïÌ≤ô1ŒîÌ†µÌ±ùÌ†µÌ†µÌ±üÌ±áÌ†µÌ±íÌ†µ‚ÄñÌ±ë (Ì†µÌ†µÌ≤ôÌ±òÌ†µÌºÉ)(‚àíÌ†µÌ±ò)Ì†µ‚ÄñÌ≤ô22Ì†µÌºÉ (Ì†µÌ±ò)‚Äñ22 √ó 100%          (38)
+            number of Residual blocks in (15)
+           activation functions {Ì†µÌΩàÌ†µÌ±ñ}2Ì†µÌ±ñ=Ì†µÃÑÌ±ô 0 in (15)  Ì†µÃÑÌ±ô = 5                                             where Ì†µÌ≤ôÌ†µÌ±ùÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ë (Ì†µÌ±ò) denotes the prediction of Ì†µÌ≤ôÌ†µÌºÉ(Ì†µÌ±ò) at time Ì†µÌ±ò.
+            neurons of each hidden layer in (15)                                                                 The predictive performances of DK and EDMD are illustrated in Ta-
+  DK number of observable functions in (7)               ReLU
+            structure of DNN (15)
+            loss function in (16) and (19)               200
+            learning rate in (15)                        Ì†µÌ±õÌ†µÌ±ß = 30
+                                                         [13, 200, ‚ãÖ ‚ãÖ ‚ãÖ, 200, 17]
+                                                         Ì†µÌ±Ü = 9, Ì†µÌªº1 = 1, Ì†µÌªº2 = 1, Ì†µÌªº3 = 10‚àí8
+                                                         10‚àí4
+
+                                                                                                             ble 5.
+
+construction. To achieve this, torques are randomly generated within
+
+[‚àí5, 5] Nm for the Ô¨Årst two joints and [‚àí2, 2] Nm for the last three                                         5.3. Tracking precision and robustness evaluation
+
+joints, within the control torque range speciÔ¨Åed in 5.1. We conducted
+
+1010 simulations of the free-Ô¨Çoating space robot to generate 1010 tra-
+
+jectories, with 1000 trajectories allocated for training and 10 reserved
+
+for testing.                                                                                                     In this subsection, we will evaluate the advantages of the proposed
+                                                                                                             method. Consequently, we compare the proposed method with the fol-
+The training loss for the DK model of the free-Ô¨Çoating space robot is                                        lowing four approaches: the proposed method without RBFNN-DO (em-
+                                                                                                             ploying MPC based on the DK model, DK-MPC), employing LQR based
+illustrated in Fig. 6.                                                                                       on the DK model (DK-LQR), employing MPC based on the EDMD model
+                                                                                                             (EDMD-MPC), and traditional NMPC. The proposed method, DK-MPC,
+Next, we conduct a simple simulation to highlight the importance                                             and EDMD-MPC are all implemented using the Ì†µÌ±ûÌ†µÌ±¢Ì†µÌ±éÌ†µÌ±ëÌ†µÌ±ùÌ†µÌ±üÌ†µÌ±úÌ†µÌ±î solver [59],
+                                                                                                             while NMPC was optimized by the Ì†µÌ±ì Ì†µÌ±öÌ†µÌ±ñÌ†µÌ±õÌ†µÌ±êÌ†µÌ±úÌ†µÌ±õ solver [59], both within
+of Assumption 4. During the DK model training, we perform one set of                                         the Matlab environment.
+
+experiments with setting biases to zero and another set without setting                                          For comparison, the cost functions of DK-MPC and EDMD-MPC are
+                                                                                                             the same as that of the proposed method. The cost function of DK-LQR
+the biases to zero. Subsequently, we validate the simulations using the                                      is:
+
+same control algorithm. All initial joint angles are set to be Ì†µÌºΩÌ†µÌ±ñ(0) = 0‚ó¶(Ì†µÌ±ñ =
+                                                                               Ì†µÌºÉÌ†µÌ±ñ
+1, 2, ‚ãØ , 5)  and  the    desired  joint  angles         are  set  to  be  Ì†µÌ±ø  Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì  (Ì†µÌ±°)  =  0‚ó¶(Ì†µÌ±ñ  =
+
+1, 2, ‚ãØ , 5). The control results for both cases are shown in Fig. 7.
+
+For comparison, an EDMD [28,36,39,40] is designed to show the
+
+eÔ¨Äectiveness of DK. The number of observables is chosen to be consistent
+
+with DK, set at 30, with 13 representing the original states. In EDMD
+
+method, the thin plate spline radial basis function used in [28,36,39,40]
+
+is adopted:                                                                                                  Ì†µÌ∞ΩÌ†µÌ∞øÌ†µÌ±ÑÌ†µÌ±Ö = ‚ÄñÌ†µÌ≤ôÌ†µÌºÉ ‚àí Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì ‚ÄñÌ†µ2Ì±∏1 + ‚ÄñÌ†µÌ≤ñ‚Äñ2Ì†µÌ±π                                                (39)
+
+                                                                                                          9
+R. Mao, T. Meng, K. Wang et al.  Aerospace Science and Technology 154 (2024) 109515
+
+                                 Fig. 7. Control performances of setting biases to 0 and without setting biases to 0.
+
+                                 Fig. 8. Predictive results of the free-Ô¨Çoating space robot with DK and EDMD.
+                                                                                         10
+R. Mao, T. Meng, K. Wang et al.                                                                                                                                                   Aerospace Science and Technology 154 (2024) 109515
+
+                                                               Table 4
+                                                               Hyperparameters of the controller.
+
+                                                                         RBFNN-DO      hyperparameter                                   value
+
+                                                                                       number of Gaussian functions in (21)             Ì†µÌ±ô = 5
+                                                                                       each element of Ì†µÌºªÌ†µÌ±ñ(Ì†µÌ±ñ = 1, 2, ‚ãØ , 50) in (21)  chosen randomly in [‚àí0.1, 0.1]
+                                                                                       width of each Gaussian function in (21)          ‚ÑèÌ†µÌ±ñ = 1(Ì†µÌ±ñ = 1, 2, ‚ãØ , 50)
+                                                                                       initial estimation weights in (23)               Ì†µÃÇÌ±æ (0) = Ì†µÌøé50
+                                                                                       RBFNN updating law in (26)                       Ì†µÌºÇ = 0.1, Ì†µÌªæ = 0.01
+                                                                                       virtual variable in (27)                         Ì†µÌªº = 0.3
+
+                                                                         Œì-MPC         decay factor (32)                                Ì†µÌºìmin = 0.01{, Ì†µÌºìmax = 10}0
+                                                                                       weights in (33) and (34)                         Ì†µÌ±∏1 = diag 20Ì†µÌ∞à5, 0.2Ì†µÌ∞à5 , Ì†µÌ±∏2 = 5Ì†µÌ∞à3
+                                                                                                                                        Ì†µÌ±∏Ì†µÌ±Å = 10Ì†µÌ±∏1, Ì†µÌ±π = 0.001Ì†µÌ∞à5
+                                                                                       prediction horizon in (34)                       Ì†µÌ±ÅÌ†µÌ±ù = 9
+
+Fig. 9. Tracking errors and control torques of Joint1. (For interpretation of the colors in the Ô¨Ågure(s), the reader is referred to the web version of this article.)
+
+                                                                                       Fig. 10. Tracking errors and control torques of Joint2.
+
+         Table 5                                                                                                          Initial joint angles and angular velocities are set to be Ì†µÌºΩÌ†µÌ±ñ(0) = 0‚ó¶(Ì†µÌ±ñ =
+         Predictive performances of DK and EDMD.                                                                          1, 2, ‚ãØ , 5), Ì†µÃáÌºΩÌ†µÌ±ñ(0) = 0‚ó¶‚àïs(Ì†µÌ±ñ = 1, 2, ‚ãØ , 5). The desired tracking trajecto-
+
+             Predict step(s)            1                                10      50        100                            ries   are    Ì†µÌ±ø     Ì†µÌºÉÌ†µÌ±ñ    (Ì†µÌ±°)  =  50‚ó¶  ‚ãÖ      sin(Ì†µÌ±°)(Ì†µÌ±ñ  =  1, 2, ‚ãØ , 5),  Ì†µÌ±ø  Ì†µÌºÉÃá Ì†µÌ±ñ  (Ì†µÌ±°)  =  50‚ó¶‚àïs  ‚ãÖ  cos(Ì†µÌ±°)(Ì†µÌ±ñ  =
+                                                                                                                                               Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì                                                         Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì
+             RRMSE (DK)                 0.69%                            1.17%   2.26%     3.50%                                                                                           Ì†µÌºÉÃá Ì†µÌ±ñ
+             RRMSE (EDMD)               6.22%                            18.91%  39.62%    89.63%                         1, 2,  ‚ãØ      , 5),  where            Ì†µÌ±ø  Ì†µÌºÉÌ†µÌ±ñ    (Ì†µÌ±°)  and  Ì†µÌ±ø  Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì  (Ì†µÌ±°)  represent  the     desired  trajectories
+                                                                                                                                                                    Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì
+                                                                                                                          for each joint and together compose the vector Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì .
+
+                                                                                                                          Besides, to evaluate the robustness of the proposed method, un-
+
+The cost function of NMPC is                                                                                              known disturbances Ì†µÌ∫´Ì†µÌ†µÌ±ñÌ±ö(Ì†µÌ±°) = (1+sin(0.2Ì†µÌ±°)+cos(0.1Ì†µÌ±°)+Ì†µÌ±í‚àí0.1Ì†µÌ±° +0.5rand(1))
+                                                                                                                          Nm (Ì†µÌ±ñ = 1, 2, ‚Ä¶ , 5) are applied to each joint during (2Ì†µÌºã, 3Ì†µÌºã]s (yellow
+mÌ†µÌ≤ñ(Ì†µiÌ±òn) Ì†µÌ∞ΩÌ†µÌ±ÅÌ†µÌ±ÄÌ†µÌ±É Ì†µÌ∞∂ (Ì†µÌ±ò) = ‚ÄñÌ†µÌ≤ôÌ†µÌºÉ (Ì†µÌ±ò + 9|Ì†µÌ±ò) ‚àí Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì (Ì†µÌ±ò + 9|Ì†µÌ±ò)‚Äñ2Ì†µÌ±∏Ì†µÌ±Å
+                                                                                                                          zones in Figs. 9 to 13). To maintain fairness, the unknown disturbances
+
+                ‚àë8 (                                                                                               )      fall within the control capabilities of the proposed controller and the
+
+             +                          ‚ÄñÌ†µÌ≤ôÌ†µÌºÉ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò) ‚àí Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì (Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)‚Äñ2Ì†µÌ±∏1 + ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)‚Äñ2Ì†µÌ±π              controllers for comparison.
+
+             [ Ì†µÌ±ñ=0                     ][ ] [ ] [ ]                                                                      The simulation results of the tracking errors and control torques of
+
+             ‚é™‚é©‚é®‚éß‚é™Ì†µÌ±¢Ì†µmÌºÑ Ì†µÌ†µiÌ±ØnÌ±Ø‚ä§Ì†µ‚©ΩÌ±èÌ†µÌ†µÌ±èÌ±ö    Ì†µÌ±Ø Ì†µÌ±èÌ†µÌ±ö         Ì†µÃàÌ≤í            Ì†µÌ≤ÑÌ†µÌ±è = Ì†µÌøé6                                       each joint are shown in Figs. 9 to 13.
+                                           Ì†µÌ±Ø Ì†µÌ±ö          Ì†µÃàÌºΩ
+subject  to                             Ì†µÌ±¢Ì†µÌºÑ(Ì†µÌ±ò + Ì†µÌ±ñ|Ì†µÌ±ò)         +       Ì†µÌ≤ÑÌ†µÌ±ö      Ì†µÌ≤ñ                                     In addition to demonstrating the control performances, several in-
+                                                          ‚©Ω    Ì†µÌ±¢mÌ†µÌºÑ ax
+                                                                         Ì†µÌºÑ = 1, 2, ‚ãØ , 5                                 dices are used to evaluate the eÔ¨Äectiveness of the four controllers: Mean
+
+                                                                                                                          square error (MSE), error variance (EV), sum of maximum absolute er-
+
+                                                                                                   (40)                   ror (SMAE), integral of square control input (ISCI) and input variance
+
+                                                                                                                      11
+R. Mao, T. Meng, K. Wang et al.                                                                                                                        Aerospace Science and Technology 154 (2024) 109515
+
+                                                                          Fig. 11. Tracking errors and control torques of Joint3.
+
+                                                                          Fig. 12. Tracking errors and control torques of Joint4.
+
+                                                                          Fig. 13. Tracking errors and control torques of Joint5.
+
+(IV). MSE, EV, and SMAE are used to evaluate control error, whereas                                             ISCI =  Ì†µÌ±á‚àë ‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò)‚Äñ22
+
+ISCI and IV are used to measure control consumption.                                                                    Ì†µÌ±ò=1
+
+    The   errors           are  deÔ¨Åned      as:  Ì†µÌ±íÌ†µÌ±ñ(Ì†µÌ±ò)  =  Ì†µÌ±ø  Ì†µÌºÉÌ†µÌ±ñ    (Ì†µÌ±ò)  ‚àí  Ì†µÌºÉÌ†µÌ±ñ(Ì†µÌ±ò)  and  Ì†µÌ≤Ü(Ì†µÌ±ò) =
+                                                                  Ì†µÌ±üÌ†µÌ±íÌ†µÌ±ì
+
+Ì†µÌ±øÌ†µÌ†µÌ±üÌºΩÌ†µÌ±íÌ†µÌ±ì (Ì†µÌ±ò) ‚àí Ì†µÌºΩ(Ì†µÌ±ò).                                                                                              ‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á   ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò) ‚àí   Ì†µÌΩÅÌ†µÌ±¢‚Äñ22
+                                                                                                                                   Ì†µÌ±Å
+    The indices MSE, EV, SMAE, ISCI, and IV are deÔ¨Åned as follows:                                              IV  =     Ì†µÌ±ò=1
+
+MSE    =  ‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á         ‚ÄñÌ†µÌ≤Ü(Ì†µÌ±ò)‚Äñ22                                                                           where Ì†µÌΩÅÌ†µÌ±í denotes the average of Ì†µÌ≤Ü(Ì†µÌ±ò), Ì†µÌΩÅÌ†µÌ±¢ denotes the average of Ì†µÌ≤ñ(Ì†µÌ±ò),
+                                                                                                                Ì†µÌ±Å = Ì†µÌ±á ‚àïŒîÌ†µÌ±á .
+             Ì†µÌ±ò=1
+
+                 Ì†µÌ±Å                                                                                                 Additionally, we compared the minimum and maximum improve-
+
+       ‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤Ü(Ì†µÌ±ò)        ‚àí  Ì†µÌΩÅÌ†µÌ±í‚Äñ22                                                                      ments of the proposed method with those of four benchmark methods
+
+EV  =     Ì†µÌ±ò=1
+
+                    Ì†µÌ±Å                                                                                          across these metrics.
+
+                                                                                                                    The control performances of the four controllers are shown in Ta-
+
+          ‚àë5                                                                                                    ble 6 and Table 7. Table 6 presents the control results for the interval
+SMAE = max|Ì†µÌ±íÌ†µÌ±ñ(Ì†µÌ±ò)|
+                                                                                                  (41)          (0, 2Ì†µÌºã]s, evaluating the tracking performance of the control system. Ta-
+
+          Ì†µÌ±ñ=1
+
+                                                                                                            12
+R. Mao, T. Meng, K. Wang et al.                                                                                                                                   Aerospace Science and Technology 154 (2024) 109515
+
+                                 Table 6
+                                 Tracking performance comparison.
+
+                                 Ì†µÌ±á ‚àà (0, 2Ì†µÌºã]s   M‚àëÌ†µSÌ±á ‚àïEŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤Ü(Ì†µÌ±ò)‚Äñ22  EV ‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤Ü(Ì†µÌ±ò)‚àíÌ†µÌΩÅÌ†µÌ±í ‚Äñ22      ‚àëSM5Ì†µÌ±ñ=A1Emax|Ì†µÌ±íÌ†µÌ±ñ (Ì†µÌ±ò)|  ‚àëISCÌ†µÌ±á I‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò)‚Äñ22  IV‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò)‚àíÌ†µÌΩÅÌ†µÌ±¢ ‚Äñ22
+
+                                 Proposed Method      Ì†µÌ±ò=1                     Ì†µÌ±ò=1                           0.3138                       Ì†µÌ±ò=1                       Ì†µÌ±ò=1
+                                 DK-MPC                                                                       0.3138
+                                 DK-LQR           Ì†µÌ±Å                                    Ì†µÌ±Å                    Ì†µÌøé.Ì†µÌøëÌ†µÌøèÌ†µÌøêÌ†µÌøó                                                     Ì†µÌ±Å
+                                 EDMD-MPC                                                                     0.3168
+                                 NMPC             Ì†µÌøè.Ì†µÌøéÌ†µÌøêÌ†µÌøïÌ†µÌøí √ó Ì†µÌøèÌ†µÌøé‚àíÌ†µÌøë    Ì†µÌøó.Ì†µÌøïÌ†µÌøóÌ†µÌøñÌ†µÌøî √ó Ì†µÌøèÌ†µÌøé‚àíÌ†µÌøí              0.3135                    3.4883 √ó 103              4.0132 √ó 104
+                                                  1.0383 √ó 10‚àí3            9.8652 √ó 10‚àí4                                                3.4635 √ó 103              Ì†µÌøí.Ì†µÌøéÌ†µÌøèÌ†µÌøêÌ†µÌøë √ó Ì†µÌøèÌ†µÌøéÌ†µÌøí
+                                                  1.0636 √ó 10‚àí3            9.9325 √ó 10‚àí4                      -2.86%                    3.4970 √ó 103              4.0766 √ó 104
+                                                  1.1840 √ó 10‚àí3            1.1399 √ó 10‚àí3                      (DK-LQR)                  8.1480 √ó 103              4.0717 √ó 104
+                                                  1.1857 √ó 10‚àí3            1.1251 √ó 10‚àí3                      9.56%                     Ì†µÌøë.Ì†µÌøéÌ†µÌøëÌ†µÌøíÌ†µÌøî √ó Ì†µÌøèÌ†µÌøéÌ†µÌøë      4.0364 √ó 104
+                                                                                                              (EDMD-MPC)
+                                 Improvement      1.06%                    6.80%                                                        -13.01%                   -0.024%
+                                      (min)       (DK-MPC)                 (DK-MPC)                                                     (NMPC)                    (DK-MPC)
+                                                  15.41%                   16.33%                                                       133.58%                   1.58%
+                                 Improvement      (NMPC)                   (EDMD-MPC)                                                   (EDMD-MPC)                (DK-LQR)
+                                      (max)
+
+                                 Table 7
+                                 Robustness performance comparison.
+
+                                 Ì†µÌ±á ‚àà (2Ì†µÌºã, 15]s  M‚àëÌ†µSÌ±á ‚àïEŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤Ü(Ì†µÌ±ò)‚Äñ22  EV ‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤Ü(Ì†µÌ±ò)‚àíÌ†µÌΩÅÌ†µÌ±í ‚Äñ22      S‚àëM5Ì†µÌ±ñ=A1Emax|Ì†µÌ±íÌ†µÌ±ñ (Ì†µÌ±ò)|  ‚àëISCÌ†µÌ±á I‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò)‚Äñ22  IV‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò)‚àíÌ†µÌΩÅÌ†µÌ±¢ ‚Äñ22
+
+                                 Proposed Method      Ì†µÌ±ò=1                     Ì†µÌ±ò=1                           Ì†µÌøé.Ì†µÌøéÌ†µÌøóÌ†µÌøñÌ†µÌøî                  Ì†µÌ±ò=1                       Ì†µÌ±ò=1
+                                 DK-MPC                                                                       0.1228
+                                 DK-LQR                        Ì†µÌ±Å                       Ì†µÌ±Å                    0.1852                                                          Ì†µÌ±Å
+                                 EDMD-MPC                                                                     0.1373
+                                 NMPC             Ì†µÌøí.Ì†µÌøíÌ†µÌøêÌ†µÌøïÌ†µÌøñ √ó Ì†µÌøèÌ†µÌøé‚àíÌ†µÌøí    Ì†µÌøë.Ì†µÌøñÌ†µÌøïÌ†µÌøóÌ†µÌøè √ó Ì†µÌøèÌ†µÌøé‚àíÌ†µÌøí              0.2814                    2.1718 √ó 104              8.4720 √ó 106
+                                                  7.2645 √ó 10‚àí4            5.8694 √ó 10‚àí4                                                Ì†µÌøê.Ì†µÌøèÌ†µÌøîÌ†µÌøëÌ†µÌøí √ó Ì†µÌøèÌ†µÌøéÌ†µÌøí      Ì†µÌøñ.Ì†µÌøíÌ†µÌøëÌ†µÌøêÌ†µÌøé √ó Ì†µÌøèÌ†µÌøéÌ†µÌøî
+                                                  1.9126 √ó 10‚àí3            1.2577 √ó 10‚àí3                      25.54%                    2.1824 √ó 104              8.4805 √ó 106
+                                                  9.4795 √ó 10‚àí4            6.3635 √ó 10‚àí4                      (DK-MPC)                  2.6488 √ó 104              8.5244 √ó 106
+                                                  4.1843 √ó 10‚àí3            2.8962 √ó 10‚àí3                      185.4%                    2.2098 √ó 104              8.5414 √ó 106
+                                                                                                              (NMPC)
+                                 Improvement      64.07%                   51.31%                                                       -0.39%                    -0.47%
+                                      (min)       (DK-MPC)                 (DK-MPC)                                                     (DK-MPC)                  (DK-MPC)
+                                                  845.01%                  646.62%                                                      21.96%                    0.82%
+                                 Improvement      (NMPC)                   (NMPC)                                                       (EDMD-MPC)                (NMPC)
+                                      (max)
+
+                                                  Fig. 14. Optimization problem-solving time of two methods.
+
+ble 7 presents the control results for the interval (2Ì†µÌºã, 15]s, assessing the                                 Ì†µÌºΩÌ†µÌ±ñ(0) = 90‚ó¶(Ì†µÌ±ñ = 1, 2, ‚ãØ , 5), Ì†µÃáÌºΩÌ†µÌ±ñ(0) = 0‚ó¶‚àïs(Ì†µÌ±ñ = 1, 2, ‚ãØ , 5). The desired track-
+robustness of the control system.                                                                             ing trajectory Ì†µÌ±øÌ†µÌ±üÌ†µÌ±íÌ†µÌ±ì is the same as speciÔ¨Åed in Subsection 5.3.
+
+    Furthermore, we analyze the optimization problem-solving time re-                                             The simulation results of the tracking errors and control torques of
+quired by the proposed method and NMPC under the Matlab environ-                                              each joint are shown in Figs. 15 to 19. Besides, we use ‚ÄñÌ†µÌΩé0‚Äñ22 to rep-
+ment on the same computer, shown in Fig. 14.                                                                  resent the base satellite attitude disturbance. The base satellite attitude
+                                                                                                              disturbances and changes of Œì(Ì†µÌ±ò) are shown in Fig. 20.
+5.4. Suppression of base satellite attitude disturbance evaluation
+                                                                                                                  In addition to demonstrating the control performances, we use the
+    In this subsection, we further evaluate the advantages of the pro-
+posed method in suppressing base satellite attitude disturbance. We                                           indices: MSE, EV, ISCI, IV and integral base satellite attitude disturbance
+compare the proposed method with: regardless of the treatment of base
+satellite attitude disturbance (proposed method without Ì†µÌ±∏2), optimiz-                                        (IBSAD).
+ing base satellite attitude disturbance without incorporating the decay
+factor Œì(Ì†µÌ±ò) (proposed method without Œì(Ì†µÌ±ò)) and DK-LQR. Consider a                                               The IBSAD is deÔ¨Åned as follows:
+more general scenario, the initial joint angles may not align with the de-
+sired trajectory. Initial joint angles and angular velocities are set to be                                   IBSAD =  Ì†µÌ±á‚àë ‚àïŒîÌ†µÌ±á         ‚ÄñÌ†µÌΩé0(Ì†µÌ±ò)‚Äñ22
+
+                                                                                                                                                                                                (42)
+
+                                                                                                                       Ì†µÌ±ò=1
+
+                                                                                                              6. Simulation results analyses and discussions
+
+                                                                                                                  This section presents analyses and discussions of the simulation re-
+                                                                                                              sults presented in Section 5.
+
+                                                                                                          13
+R. Mao, T. Meng, K. Wang et al.                                                           Aerospace Science and Technology 154 (2024) 109515
+
+                                 Fig. 15. Tracking errors and control torques of Joint1.
+
+                                 Fig. 16. Tracking errors and control torques of Joint2.
+
+                                 Fig. 17. Tracking errors and control torques of Joint3.
+
+6.1. Training and prediction evaluation results                                      It is evident from Fig. 8 and Table 5 that the predictive performance
+                                                                                 of DK signiÔ¨Åcantly surpasses that of EDMD. This can be attributed to
+    Fig. 6 shows the rapid convergence of the DNN training loss, indi-           the fact that EDMD relies on manually selected observable functions,
+cating that the observable functions are learned by the DNN.                     which inherently possess limitations, whereas DK utilizes DNN trained
+                                                                                 to derive observable functions. Consequently, DK is capable of capturing
+    Fig. 7 highlights the signiÔ¨Åcance of Assumption 4. In some studies           rich mapping relationships of observable functions, thereby exhibiting
+that utilize the DK solely for prediction [49,50], the presence of biases        superior predictive performance compared to EDMD.
+enhances the expressive capability of DNN. However, this paper focuses
+on control issues. If biases are not set to zero, the controlled system          6.2. Tracking precision and robustness results
+may experience undesirable state drift at the equilibrium points. This
+is because even if the states converge to zero, the values of the observ-            Figs. 9 to 13, along with Tables 6 and 7, clearly illustrate that the
+able functions might not be zero, leading to continuous computation              proposed method excels in both precision and robustness.
+of control inputs and potentially causing system divergence. For simple
+systems, extensive data and thorough training can mitigate the eÔ¨Äects                In terms of tracking performance, the proposed method shows ad-
+of not setting biases to zero. Nonetheless, this paper directly avoids this      vantages over the four other methods in both MSE and EV. SpeciÔ¨Å-
+potential problem by explicitly setting biases to zero.                          cally, the proposed method achieves a 1.06% improvement in MSE and
+
+                                                                             14
+R. Mao, T. Meng, K. Wang et al.                                                           Aerospace Science and Technology 154 (2024) 109515
+
+                                 Fig. 18. Tracking errors and control torques of Joint4.
+
+                                 Fig. 19. Tracking errors and control torques of Joint5.
+
+a 6.8% enhancement in EV compared to DK-MPC. This improvement                 experiences smaller state variations when subjected to disturbances, re-
+is attributed to the use of RBFNN-DO for observing modeling errors,           quiring less energy to return to equilibrium.
+which enhances tracking accuracy. DK-MPC exhibits a slight improve-
+ment in both MSE and EV over DK-LQR, primarily due to the larger                  From Fig. 14, it is evident that due to the need to solve a com-
+control inputs at the initial stage of tracking, which DK-LQR is unable       plex nonlinear optimization problem within the prediction horizon,
+to handle input constraints. This phenomenon will be further explained        NMPC requires a substantial computational eÔ¨Äort. In contrast, the pro-
+in the next subsection. However, DK-LQR performs best in the SMAE.            posed method entails solving a simpler quadratic programming problem
+EDMD-MPC suÔ¨Äers from signiÔ¨Åcant control input chattering due to inap-         within the prediction horizon. Consequently, the computational burden
+propriate dynamic linearization, resulting in poor tracking performance.      of the proposed method is signiÔ¨Åcantly lower compared to NMPC in
+The proposed method exhibits a 16.33% improvement in EV compared              terms of optimization problem-solving time, indicating its potential for
+to EDMD-MPC, while its ISCI demonstrates a 133.58% enhancement in             practical applications.
+comparison to EDMD-MPC. While NMPC requires an accurate nonlin-
+ear dynamic model, the proposed method improves MSE by 15.41%                 6.3. Suppression of base satellite attitude disturbance results
+compared to NMPC. However, NMPC excels the best performance in
+terms of energy consumption, with the proposed method‚Äôs ISCI lagging              Based on Figs. 15 to 20 and Table 8, it is evident that the proposed
+by 13.01%.                                                                    method demonstrates superior performance in the suppression of base
+                                                                              satellite attitude disturbance without loss tracking precision.
+    In terms of robustness performance, the proposed method demon-
+strates signiÔ¨Åcant advantages compared to the four other methods.                 The mutual coupling between the base satellite and the manipulator
+When faced with disturbances, the proposed method achieves a 64.07%           of the free-Ô¨Çoating space robot implies that the actuations of manipu-
+improvement in MSE, a 51.31% enhancement in EV, and a 25.52% im-              lator joint angles generate disturbances on the base satellite, which, in
+provement in SMAE over DK-MPC. DK-MPC shows improvement in MSE,               turn, aÔ¨Äects the dynamic characteristics during joint angle tracking. Ow-
+EV, and SMAE over DK-LQR because MPC‚Äôs utilization of rolling opti-           ing to the proposed method‚Äôs consideration for the suppression of base
+mization enhances controller robustness, surpassing LQR‚Äôs performance.        satellite attitude disturbance during the control process, the joint angles
+Compared to NMPC, the proposed method‚Äôs MSE improves by 845.01%,              exhibit a smoother approach toward the desired trajectory compared
+EV improves by 646.62%, and SMAE improves by 185.4%. This is be-              to the proposed method without Ì†µÌ±∏2, thereby reducing overshoot at the
+cause NMPC relies on an accurate model, which makes it less robust            beginning of the control process. Although the proposed method with-
+compared to the proposed method. In terms of energy consumption, the          out Œì(Ì†µÌ±ò) excels in EV, IBSAD, ISCI and IV, the trade-oÔ¨Ä is a signiÔ¨Åcantly
+proposed method has a slight disadvantage compared to DK-MPC. How-            lower accuracy in the tracking phase compared to the proposed method.
+ever, it outperforms the other methods because the proposed method            Due to the introduction of the decay factor, the proposed method har-
+                                                                              monizes the strengths and weaknesses of the proposed method without
+
+                                                                          15
+R. Mao, T. Meng, K. Wang et al.                                                                                                                                     Aerospace Science and Technology 154 (2024) 109515
+
+                                 Fig. 20. Base satellite attitude disturbance of four controllers and change of Œì(Ì†µÌ±ò).
+
+                                 Table 8
+                                 Performance comparison.
+
+                                                     M‚àëÌ†µSÌ±á ‚àïEŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤Ü(Ì†µÌ±ò)‚Äñ22  EV ‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤Ü(Ì†µÌ±ò)‚àíÌ†µÌΩÅÌ†µÌ±í ‚Äñ22  I‚àëBSÌ†µÌ±á A‚àïŒîDÌ†µÌ±á  ‚ÄñÌ†µÌΩé0 (Ì†µÌ±ò)‚Äñ22  I‚àëSCÌ†µÌ±á I‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò)‚Äñ22  IV‚àëÌ†µÌ±á ‚àïŒîÌ†µÌ±á  ‚ÄñÌ†µÌ≤ñ(Ì†µÌ±ò)‚àíÌ†µÌΩÅÌ†µÌ±¢ ‚Äñ22
+
+                                                         Ì†µÌ±ò=1                     Ì†µÌ±ò=1                          Ì†µÌ±ò=1                         Ì†µÌ±ò=1                       Ì†µÌ±ò=1
+
+                                                          Ì†µÌ±Å                               Ì†µÌ±Å                                                                                   Ì†µÌ±Å
+
+                                 Proposed Method     Ì†µÌøé.Ì†µÌøîÌ†µÌøîÌ†µÌøìÌ†µÌøñ              0.5897                         123.8397                     9.5713 √ó 103              3.6757 √ó 103
+                                                                              0.6025                         173.8321                     1.1598 √ó 104              4.3144 √ó 103
+                                 Proposed Method     0.6675
+                                      without Ì†µÌ±∏2
+                                                     0.7395                   Ì†µÌøé.Ì†µÌøìÌ†µÌøëÌ†µÌøíÌ†µÌøì                    Ì†µÌøïÌ†µÌøë.Ì†µÌøóÌ†µÌøîÌ†µÌøíÌ†µÌøè                Ì†µÌøï.Ì†µÌøîÌ†µÌøíÌ†µÌøóÌ†µÌøó √ó Ì†µÌøèÌ†µÌøéÌ†µÌøë      Ì†µÌøî.Ì†µÌøèÌ†µÌøèÌ†µÌøêÌ†µÌøé √ó Ì†µÌøèÌ†µÌøéÌ†µÌøê
+                                 Proposed Method
+                                      without Œì(Ì†µÌ±ò)  0.8082                   0.7599                         457.2700                     1.5068 √ó 104              6.9374 √ó 103
+
+                                 DK-LQR
+
+Ì†µÌ±∏2 and the proposed method without Œì(Ì†µÌ±ò), suppressing base satellite at-                                        approaches to further reduce control energy consumption and enhance
+titude disturbance during the initial control phase to enhance dynamic                                           tracking accuracy. Additionally, although one advantage of the pro-
+characteristics, while prioritizing tracking precision during the trajec-                                        posed method in this paper is its rapid optimization control solving
+tory tracking control phase. Compared to DK-LQR, the proposed method                                             speed, no experiments have been conducted on Ô¨Çight hardware. Future
+signiÔ¨Åcantly outperforms in dynamic characteristics as LQR cannot han-                                           experiments could be conducted to validate the real-time performance
+dle input constraints.                                                                                           of the proposed method.
+
+7. Conclusions                                                                                                   CRediT authorship contribution statement
+
+    This paper initially presents an approach that leverages Koopman                                                 Renhao Mao: Writing ‚Äì review & editing, Writing ‚Äì original draft,
+operator and DNN for modeling the nonlinear dynamics of micro-nano                                               Visualization, Validation, Software, Resources, Methodology, Investiga-
+free-Ô¨Çoating space robots. This approach oÔ¨Äers a signiÔ¨Åcant reduction                                            tion, Formal analysis, Data curation, Conceptualization. Tao Meng: Su-
+in computational burden by facilitating MPC based on a globally lin-                                             pervision, Project administration, Funding acquisition. Kun Wang: Vi-
+earized model compared to NMPC. A key innovation lies in integrating                                             sualization, Validation, Formal analysis, Conceptualization. Jiakun Lei:
+a decay factor within the MPC optimization objective function to bal-                                            Writing ‚Äì original draft, Validation, Conceptualization. Weijia Wang:
+ance joint angle tracking precision and the suppression of base satellite                                        Validation, Formal analysis, Conceptualization.
+attitude disturbance. Further enhancing the control strategy, an RBFNN-
+DO is implemented for online compensation of modeling inaccuracies                                               Declaration of competing interest
+and external disturbances, thereby improving tracking precision and
+robustness. The simulation results underscore the superior tracking pre-                                             The authors declare that they have no known competing Ô¨Ånancial
+cision, robustness against disturbances, and computational eÔ¨Éciency of                                           interests or personal relationships that could have appeared to inÔ¨Çuence
+the proposed method compared to traditional NMPC and other baseline                                              the work reported in this paper.
+methods. Particularly, the proposed method exhibits enhanced capabil-
+ities in suppressing base satellite attitude disturbance without compro-                                         Data availability
+mising tracking precision. This research contributes to advancing the
+control strategy of free-Ô¨Çoating space robots, highlighting the potential                                            Data will be made available on request.
+of learning-based methodologies in overcoming the challenges posed by
+their complex dynamics and interaction with the environment.                                                     Acknowledgement
+
+    However, this paper has some limitations. Firstly, although the pro-                                             This research was supported by Zhejiang Provincial Natural Science
+posed method oÔ¨Äers numerous advantages over traditional NMPC, it                                                 Foundation of China under Grant No. LR24F030001.
+still lags behind in energy consumption during the tracking phase, and
+the tracking accuracy can be further improved. Therefore, future work
+could focus on integrating the proposed method with other intelligent
+
+                                                                                                             16
+R. Mao, T. Meng, K. Wang et al.                                                                                                                                                                    Aerospace Science and Technology 154 (2024) 109515
+
+    The authors would like to thank the handling Associate Editor and                                                                        The Ô¨Årst diÔ¨Äerence of Ì†µÌ±â3(Ì†µÌ±ò) is given by:                                                                                        (A.8)
+the anonymous reviewers for their insightful comments, which help to
+improve the quality of our article.                                                                                                      ŒîÌ†µÌ±â3(Ì†µÌ±ò) = Ì†µÌ±â3(Ì†µÌ±ò + 1) ‚àí Ì†µÌ±â3(Ì†µÌ±ò)
+                                                                                                                                                  = ‚ÄñÌ†µÃÉÌ±´(Ì†µÌ±ò + 1)‚Äñ22 ‚àí ‚ÄñÌ†µÃÉÌ±´(Ì†µÌ±ò)‚Äñ22
+Appendix A. Proof of Theorem 1                                                                                                                    = ‚ÄñÌ†µÌ±´(Ì†µÌ±ò + 1)‚Äñ22 ‚àí 2Ì†µÌªºÌ†µÌ±´‚ä§(Ì†µÌ±ò + 1)Ì†µÃÉÌ±æ (Ì†µÌ±ò)Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))
+                                                                                                                                                     + 2Ì†µÌªºÌ†µÌ±´‚ä§(Ì†µÌ±ò + 1)Ì†µÃÉÌ±´(Ì†µÌ±ò) + Ì†µÌªº2‚ÄñÌ†µÌ±Æ‚ä§(Ì†µÌ≤õ(Ì†µÌ±ò))Ì†µÃÉÌ±æ (Ì†µÌ±ò)‚Äñ22
+    DeÔ¨Åne the estimation error of integrated disturbances as Ì†µÃÉÌ±´(Ì†µÌ±ò) =                                                                               ‚àí 2Ì†µÌªº2Ì†µÌ±Æ‚ä§(Ì†µÌ≤õ(Ì†µÌ±ò))Ì†µÃÉÌ±æ (Ì†µÌ±ò)Ì†µÃÉÌ±´(Ì†µÌ±ò) + (Ì†µÌªº2 ‚àí 1)‚ÄñÌ†µÃÉÌ±´(Ì†µÌ±ò)‚Äñ22
+Ì†µÃÇÌ±´(Ì†µÌ±ò) ‚àí Ì†µÌ±´(Ì†µÌ±ò). Then, choose a candidate Lyapunov function as follows:
+                                                                                                                                             According to Young‚Äôs inequality [60]:
+
+Ì†µÌ±â (Ì†µÌ±ò) = Ì†µÌ±â1(Ì†µÌ±ò) + Ì†µÌ±â2(Ì†µÌ±ò) + Ì†µÌ±â3(Ì†µÌ±ò)                                                                                         (A.1)      ‚àí  2Ì†µÌΩÉ‚ä§(Ì†µÌ±ò     +  1)Ì†µÃÉÌ±´(Ì†µÌ±ò)       ‚©Ω     Ì†µÌºå12‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò   +    1)‚Äñ22      +       1     ‚ÄñÌ†µÃÉÌ±´ (Ì†µÌ±ò)‚Äñ22
+where:                                                                                                                                                                                                                Ì†µÌºå21
+                                                                                                                                                 ‚àë Ì†µÌ±õÌ†µÌ±ß
+                                                          ‚àë Ì†µÌ±õÌ†µÌ±ß ‚ÄñÌ†µÃÉÌ±æ                                                                    ‚àí  2Ì†µÌªæ      Ì†µÌºâÌ†µÌ±ñ(Ì†µÌ±ò  +       1)Ì†µÌ±Æ‚ä§(Ì†µÌ≤õ(Ì†µÌ±ò))Ì†µÃÇÌ±æ             Ì†µÌ±ñ(Ì†µÌ±ò)  ‚©Ω     Ì†µÌªæ 2 Ì†µÌºå22 Ì†µÌ±ô‚ÄñÌ†µÌΩÉ (Ì†µÌ±ò  +  1)‚Äñ22   +      1     ‚ÄñÌ†µÃÇÌ±æ    (Ì†µÌ±ò)‚Äñ22
+                                                                                                                                                                                                                                                        Ì†µÌºå22
+Ì†µÌ±â1(Ì†µÌ±ò) = ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò)‚Äñ22,             Ì†µÌ±â2(Ì†µÌ±ò)     =    1      Ì†µÌ±ñ=1         Ì†µÌ±ñ(Ì†µÌ±ò)‚Äñ22,          Ì†µÌ±â3(Ì†µÌ±ò) = ‚ÄñÌ†µÃÉÌ±´(Ì†µÌ±ò)‚Äñ22              (A.2)              Ì†µÌ±õ=1
+                                                   Ì†µÌºÇ
+                                                                                                                                         ‚àí  2Ì†µÌªºÌ†µÌ±´‚ä§(Ì†µÌ±ò      +  1)Ì†µÃÉÌ±æ       (Ì†µÌ±ò)Ì†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))           ‚©Ω  Ì†µÌºå23 ‚ÄñÌ†µÌ±´ (Ì†µÌ±ò       +     1)‚Äñ22  +   Ì†µÌªº2Ì†µÌ±ô  ‚ÄñÌ†µÃÉÌ±æ       (Ì†µÌ±ò)‚Äñ22            (A.9)
+                                                                                                                                                                                                                                          Ì†µÌºå32
+and Ì†µÃÉÌ±æ Ì†µÌ±ñ(Ì†µÌ±ò) ‚àà ‚ÑùÌ†µÌ±ô represents the Ì†µÌ±ñ-th column estimation error of Ì†µÌ±æ (Ì†µÌ±ò).
+    The Ô¨Årst diÔ¨Äerence of Ì†µÌ±â1(Ì†µÌ±ò) is given by:                                                                                           2Ì†µÌªºÌ†µÌ±´‚ä§(Ì†µÌ±ò    +    1)Ì†µÃÉÌ±´(Ì†µÌ±ò)      ‚©Ω      Ì†µÌºå42 ‚ÄñÌ†µÌ±´ (Ì†µÌ±ò  +      1)‚Äñ22      +    Ì†µÌªº2   ‚ÄñÌ†µÃÉÌ±´ (Ì†µÌ±ò)‚Äñ22
+                                                                                                                                                                                                                      Ì†µÌºå42
+
+ŒîÌ†µÌ±â1(Ì†µÌ±ò) = Ì†µÌ±â1(Ì†µÌ±ò + 1) ‚àí Ì†µÌ±â1(Ì†µÌ±ò)                                                                                              (A.3)      ‚àí  2Ì†µÌªº2Ì†µÌ±Æ‚ä§(Ì†µÌ≤õ(Ì†µÌ±ò))Ì†µÃÉÌ±æ            (Ì†µÌ±ò)Ì†µÃÉÌ±´ (Ì†µÌ±ò)     ‚©Ω   Ì†µÌºå52 ‚ÄñÌ†µÃÉÌ±´ (Ì†µÌ±ò)‚Äñ22            +  Ì†µÌªº4Ì†µÌ±ô2  ‚ÄñÌ†µÃÉÌ±æ  (Ì†µÌ±ò)‚Äñ22
+         = ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò + 1)‚Äñ22 ‚àí ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò)‚Äñ22                                                                                                                                                                                          Ì†µÌºå52
+
+    The Ô¨Årst diÔ¨Äerence of Ì†µÌ±â2(Ì†µÌ±ò) is given by:                                                                                           where Ì†µÌºå1, Ì†µÌºå2, Ì†µÌºå3, Ì†µÌºå4, Ì†µÌºå5 are non-zero constants.
+                                                                                                                                             Thus:
+
+ŒîÌ†µÌ±â2(Ì†µÌ±ò) = Ì†µÌ±â2(Ì†µÌ±ò + 1) ‚àí Ì†µÌ±â2(Ì†µÌ±ò)                                                                                                         ŒîÌ†µÌ±â   (Ì†µÌ±ò)  =  ‚àíŒîÌ†µ(Ì±â11(‚àíÌ†µÌ±ò)Ì†µÌºå+12    ŒîÌ†µÌ±â2    (‚àíÌ†µÌ±ò)Ì†µÌ±ôÌ†µ+Ìªæ 2ŒîÌ†µÌºå22Ì†µ)Ì±â3‚Äñ(Ì†µÌ†µÌ±òÌΩÉ)(Ì†µÌ±ò
+                                                                                                                                                     ‚©Ω    (                  ‚àí Ì†µÌ±ôÌ†µÌºÇ
+          =  1   ‚àë Ì†µÌ±õÌ†µÌ±ß ‚ÄñÌ†µÃÉÌ±æ      Ì†µÌ±ñ(Ì†µÌ±ò  +    1)‚Äñ22       ‚àí    1   ‚àë Ì†µÌ±õÌ†µÌ±ß ‚ÄñÌ†µÃÉÌ±æ      Ì†µÌ±ñ(Ì†µÌ±ò)‚Äñ22                                                                                                                         +  1)‚Äñ22  ‚àí     ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò)‚Äñ22        +   Ì†µÌªæ  ‚ÄñÌ†µÌ±æ   ‚àó(Ì†µÌ±ò)‚Äñ22
+             Ì†µÌºÇ                                                Ì†µÌºÇ                                                                                                                                                                                           Ì†µÌºÇ
+                 Ì†µÌ±ñ=1                                              Ì†µÌ±ñ=1                                                                                                                                          )
+
+             ‚àë Ì†µÌ±õÌ†µÌ±ß    [                                                                                                                                     Ì†µÌªæ       ‚àí Ì†µÌªº2Ì†µÌ±ô2   ‚àí   Ì†µÌªº2Ì†µÌ±ô         ‚àí  Ì†µÌªº4Ì†µÌ±ô2          ‚ÄñÌ†µÃÉÌ±æ (Ì†µÌ±ò)‚Äñ22
+                        Ì†µÌºÇÌ†µÌºâÌ†µ2Ì±ñ (Ì†µÌ±ò                                                                                                                     ‚àí Ì†µÌºÇ                         Ì†µÌºå)32             Ì†µÌºå25
+          =                          +   1)‚ÄñÌ†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))‚Äñ22              ‚àí    2Ì†µÌªæ  Ì†µÌºâÌ†µÌ±ñ(Ì†µÌ±ò  +  1)Ì†µÌ±Æ‚ä§(Ì†µÌ≤õ(Ì†µÌ±ò))Ì†µÃÇÌ±æ         Ì†µÌ±ñ(Ì†µÌ±ò)  (A.4)
+                                                                                                                                                          (
+                                                                                                                                                                          Ì†µÌªæ 2                                                                                           (A.10)
+             Ì†µÌ±ñ=1                                                                                                                                            Ì†µÌªæ           Ì†µÌºÇ         1         ‚ÄñÌ†µÃÇÌ±æ (Ì†µÌ±ò)‚Äñ22
+                                                                                                                                                        ‚àí    Ì†µÌºÇ       ‚àí          ‚àí   Ì†µÌºå22              )
+                                                                                     Ì†µÌªæ 2                                                                  (
+             ‚àí   2Ì†µÌºâÌ†µÌ±ñ(Ì†µÌ±ò      +  1)Ì†µÃÉÌ∞∑Ì†µ‚ä§Ì±ñ (Ì†µÌ±ò)    ‚àí      2Ì†µÌºâÌ†µ2Ì±ñ (Ì†µÌ±ò   +    1)   +   Ì†µÌºÇ    ‚ÄñÌ†µÃÇÌ±æ    Ì†µÌ±ñ(Ì†µÌ±ò)‚Äñ22
+
+                 2Ì†µÌªæ                               ]                                                                                                    ‚àí  (11+‚àíÌ†µÌºåÌ†µ321Ìºå12+‚àíÌ†µÌºå24Ì†µÌªº)2‚Äñ‚àíÌ†µÌ±´Ì†µÌºå(52Ì†µÌ±ò‚àí+           Ì†µÌªº2        ‚ÄñÌ†µÃÉÌ±´ (Ì†µÌ±ò)‚Äñ22
+                 Ì†µÌºÇ                                                                                                                                     +
+             ‚àí         Ì†µÃÉÌ±æ     ‚ä§Ì†µÌ±ñ (Ì†µÌ±ò)Ì†µÃÇÌ±æ    Ì†µÌ±ñ  (Ì†µÌ±ò)                                                                                                                                                     Ì†µÌºå24
+                                                                                                                                                                                                           1)‚Äñ22
+where Ì†µÌºâÌ†µÌ±ñ(Ì†µÌ±ò + 1) is the Ì†µÌ±ñ-th element of Ì†µÌΩÉ(Ì†µÌ±ò + 1), Ì†µÃÉÌ∞∑Ì†µÌ±ñ(Ì†µÌ±ò) is the Ì†µÌ±ñ-th element                                                                                                      (                  + Ì†µÌºå24) ‚ÄñÌ†µÌ±´(Ì†µÌ±ò
+of Ì†µÃÉÌ±´(Ì†µÌ±ò).                                                                                                                                   Let    Ì†µÌ∞∂0  =   Ì†µÌªæ  ‚ÄñÌ†µÌ±æ     ‚àó(Ì†µÌ±ò)‚Äñ22   +      1      + Ì†µÌºå23                              +  1)‚Äñ22 ,       ŒîÌ†µÌ±â     (Ì†µÌ±ò)  <  0     holds
+                                                                                                                                                              Ì†µÌºÇ
+    Thus:
+                                                                                                                                         as long as the following condition holds:
+
+ŒîÌ†µÌ±â1(Ì†µÌ±ò) + ŒîÌ†µÌ±â2(Ì†µÌ±ò) = ‚àí ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò + 1)‚Äñ22 ‚àí ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò)‚Äñ22 ‚àí 2Ì†µÌΩÉ‚ä§(Ì†µÌ±ò + 1)Ì†µÃÉÌ±´(Ì†µÌ±ò)                                                                                         ‚àö                  Ì†µÌ∞∂0
+
+                                      ‚àë Ì†µÌ±õÌ†µÌ±ß                                                                                             ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò + 1)‚Äñ2 >                  1 ‚àí Ì†µÌºå21 ‚àí Ì†µÌ±ôÌ†µÌºÇ ‚àí Ì†µÌ±ôÌ†µÌªæ2Ì†µÌºå22            ,
+
+                                  +           [    Ì†µÌºâÌ†µ2Ì±ñ  (Ì†µÌ±ò  +   1)‚ÄñÌ†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))‚Äñ22                                                                     > ‚àö ‚àö ‚àö ‚àö ‚àö
+                                               Ì†µÌºÇ                                                                                                             1‚àí
+
+                                      Ì†µÌ±ñ=1                                                                                    (A.5)      ‚ÄñÌ†µÃÉÌ±´ (Ì†µÌ±ò)‚Äñ2                                Ì†µÌ∞∂0
+                                                                                                                                                                                 ‚àí Ì†µÌªº2 ‚àí Ì†µÌºå25
+                                  ‚àí 2Ì†µÌªæÌ†µÌºâÌ†µÌ±ñ(Ì†µÌ±ò + 1)Ì†µÌ±Æ‚ä§(Ì†µÌ≤õ(Ì†µÌ±ò))Ì†µÃÇÌ±æ Ì†µÌ±ñ(Ì†µÌ±ò)                              ]                                                                    1                          ‚àí    Ì†µÌªº2
+                                                                                                   (Ì†µÌ±ò)                                                                    Ì†µÌºå21                            Ì†µÌºå42
+                                  Ì†µÌªæ 2   ‚ÄñÌ†µÃÇÌ±æ     Ì†µÌ±ñ(Ì†µÌ±ò)‚Äñ22            2Ì†µÌªæ  Ì†µÃÉÌ±æ  ‚ä§   (Ì†µÌ±ò)Ì†µÃÇÌ±æ
+                                  Ì†µÌºÇ                           ‚àí       Ì†µÌºÇ        Ì†µÌ±ñ            Ì†µÌ±ñ                                                          ‚àö ‚àö ‚àö ‚àö ‚àö                                                                         ‚àö ‚àö ‚àö ‚àö ‚àö
+
+                                                                                                                                         ‚ÄñÌ†µÃÉÌ±æ  (Ì†µÌ±ò)‚Äñ2   >                            Ì†µÌ∞∂0                         ,       ‚ÄñÌ†µÃÇÌ±æ  (Ì†µÌ±ò)‚Äñ2     >                     Ì†µÌ∞∂0
+
+     Considering:                                                                                                                                                     Ì†µÌªæ  ‚àí  Ì†µÌªº2Ì†µÌ±ô2  ‚àí     Ì†µÌªº2 Ì†µÌ±ô  ‚àí  Ì†µÌªº4 Ì†µÌ±ô2                                           Ì†µÌªæ  ‚àí   Ì†µÌªæ 2  ‚àí  1
+                                                                                                                                                                      Ì†µÌºÇ                   Ì†µÌºå23        Ì†µÌºå52                                             Ì†µÌºÇ      Ì†µÌºÇ       Ì†µÌºå22
+
+‚ÄñÌ†µÌ±Æ(Ì†µÌ≤õ(Ì†µÌ±ò))‚Äñ22 < Ì†µÌ±ô,                                                                                                                                                                                                                                                     (A.11)
+
+2Ì†µÌªæ  Ì†µÃÉÌ±æ  Ì†µ‚ä§Ì±ñ (Ì†µÌ±ò)Ì†µÃÇÌ±æ  Ì†µÌ±ñ(Ì†µÌ±ò)  =  Ì†µÌªæ  ‚ÄñÌ†µÃÉÌ±æ        Ì†µÌ±ñ(Ì†µÌ±ò)‚Äñ22    +   Ì†µÌªæ  ‚ÄñÌ†µÃÇÌ±æ   Ì†µÌ±ñ(Ì†µÌ±ò)‚Äñ22    ‚àí   Ì†µÌªæ  ‚ÄñÌ†µÌ±æ   ‚àó   (Ì†µÌ±ò)‚Äñ22          (A.6)          Invoking the Lemma 1, by selecting appropriate Ì†µÌ±ô, Ì†µÌºÇ, Ì†µÌªº, Ì†µÌªæ, the esti-
+Ì†µÌºÇ                                Ì†µÌºÇ                               Ì†µÌºÇ                          Ì†µÌºÇ        Ì†µÌ±ñ                              mation error of internal and external disturbances are UUB.
+
+     Thus:
+
+                                                                                                                                         Appendix B. Proof of Theorem 3
+
+ŒîÌ†µÌ±â1(Ì†µÌ±ò) + ŒîÌ†µÌ±â2(Ì†µÌ±ò) ‚©Ω ‚àí ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò + 1)‚Äñ22 ‚àí ‚ÄñÌ†µÌΩÉ(Ì†µÌ±ò)‚Äñ22 ‚àí 2Ì†µÌΩÉ‚ä§(Ì†µÌ±ò + 1)Ì†µÃÉÌ±´(Ì†µÌ±ò)
+
+                                  +   Ì†µÌºÇÌ†µÌ±ô‚ÄñÌ†µÌΩÉ‚ä§(Ì†µÌ±ò         +    1)‚Äñ22       +  Ì†µÌªæ 2  ‚ÄñÌ†µÌ±æ ÃÇ(Ì†µÌ±ò)‚Äñ22   ‚àí     Ì†µÌªæ  ‚ÄñÌ†µÃÉÌ±æ  (Ì†µÌ±ò)‚Äñ22                    DeÔ¨Åne a Lyapunov function:
+                                                                              Ì†µÌºÇ                         Ì†µÌºÇ
+                                                                                                                                         Ì†µÌ±â4(Ì†µÌ±ò) = Ì†µÌ∞Ω ‚àó(Ì†µÌ±ò)
+                                  ‚àí   Ì†µÌªæ  ‚ÄñÌ†µÃÇÌ±æ     (Ì†µÌ±ò)‚Äñ22     +       Ì†µÌªæ  ‚ÄñÌ†µÌ±æ   ‚àó(Ì†µÌ±ò)‚Äñ22                                     (A.7)                                                                                                                                            (B.1)
+                                      Ì†µÌºÇ                               Ì†µÌºÇ
+                                                                                                                                         where Ì†µÌ∞Ω ‚àó(Ì†µÌ±ò) is the optimal objective cost function.
+                                  ‚àí 2Ì†µÌªæ ‚àë Ì†µÌ±õÌ†µÌ±ß Ì†µÌºâÌ†µÌ±ñ(Ì†µÌ±ò + 1)Ì†µÌ±Æ‚ä§(Ì†µÌ≤õ(Ì†µÌ±ò))Ì†µÃÇÌ±æ Ì†µÌ±ñ(Ì†µÌ±ò)
+                                                                                                                                             DeÔ¨Åne the objective cost function of the feasible trajectory at time
+                                          Ì†µÌ±õ=1                                                                                           Ì†µÌ±ò + 1: Ì†µÌ∞ΩÃÑ(Ì†µÌ±ò + 1).
+
+                                                                                                                                     17
+R. Mao, T. Meng, K. Wang et al.                                                                                                                                                   Aerospace Science and Technology 154 (2024) 109515
+
+The diÔ¨Äerence of Ì†µÌ∞ΩÃÑ(Ì†µÌ±ò + 1) and Ì†µÌ∞Ω ‚àó(Ì†µÌ±ò) is:                                                                                      [7] Q. Yao, Adaptive fuzzy neural network control for a space manipulator in the pres-
+                                                                                                                                         ence of output constraints and input nonlinearities, Adv. Space Res. 67 (6) (2021)
+ŒîÌ†µÌ∞Ω (Ì†µÌ±ò) = Ì†µÌ∞ΩÃÑ(Ì†µÌ±ò + 1) ‚àí Ì†µÌ∞Ω ‚àó(Ì†µÌ±ò)                                                                                                        1830‚Äì1843, https://doi.org/10.1016/j.asr.2021.01.001.
+
+  Ì†µ‚àë Ì±ÅÌ†µÌ±ù ‚àí1                                                                                                                        [8] A. Prakash, D.K. Giri, S.R. Kumar, Dynamic velocity error based trajectory tracking
+= [Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ + 1|Ì†µÌ±ò + 1), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ + 1|Ì†µÌ±ò + 1))                                                                                   for space robotic manipulator, Aerosp. Sci. Technol. 126 (2022) 107650, https://
+                                                                                                                                         doi.org/10.1016/j.ast.2022.107650.
+ Ì†µÌ±ñ=0        +       Ì†µÌ±ñ|Ì†µÌ±ò),  Ì†µÌ≤ñ‚àó  (Ì†µÌ±ò  +       ]
+                                           Ì†µÌ±ñ|Ì†µÌ±ò))                                                                                 [9] Z. Xie, T. Sun, T.H. Kwan, Z. Mu, X. Wu, A new reinforcement learning based adap-
+‚àí Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò                                                                                                                              tive sliding mode control scheme for free-Ô¨Çoating space robotic manipulator, IEEE
+                                                                                                                                         Access 8 (2020) 127048‚Äì127064, https://doi.org/10.1109/ACCESS.2020.3008399.
++ Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù + 1|Ì†µÌ±ò + 1)) ‚àí Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò))
+                                                                                                                                  [10] R. Jin, P. Rocco, Y. Geng, Observer-based Ô¨Åxed-time tracking control for space
+  Ì†µ‚àë Ì±ÅÌ†µÌ±ù ‚àí2                                                                                         (B.2)                                robots in task space, Acta Astronaut. 184 (2021) 35‚Äì45, https://doi.org/10.1016/j.
+= [Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ + 1|Ì†µÌ±ò + 1), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ + 1|Ì†µÌ±ò + 1))                                                                                   actaastro.2021.04.002.
+
+ Ì†µÌ±ñ=0        +       Ì†µÌ±ñ  +  1|Ì†µÌ±ò),    Ì†µÌ≤ñ‚àó  (Ì†µÌ±ò  +  Ì†µÌ±ñ  +        ]                                                                 [11] R. Jin, Y. Geng, X. Chen, PredeÔ¨Åned-time control for free-Ô¨Çoating space robots in
+                                                          1|Ì†µÌ±ò))                                                                         task space, J. Franklin Inst. 358 (18) (2021) 9542‚Äì9560, https://doi.org/10.1016/
+‚àí Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò                                                                                                                              j.jfranklin.2021.09.030.
+
+       + Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò + 1), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò + 1))                                                                          [12] Y. Yan, H. Cui, P. Han, Fixed-time control for free-Ô¨Çoating space manipulators
+       ‚àí Ì†µÌ∞ø(Ì†µÌ≤õ(Ì†µÌ±ò), Ì†µÌ≤ñ‚àó(Ì†µÌ±ò)) + Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù + 1|Ì†µÌ±ò + 1))                                                                          with prescribed constraints and input saturation, Aeronaut. J. 128 (1324) (2024)
+       ‚àí Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò)) + Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò + 1))                                                                         1219‚Äì1244, https://doi.org/10.1017/aer.2023.99.
+       ‚àí Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò + 1))
+Invoking Assumption 6 and Assumption 7:                                                                                           [13] T. Sands, Development of deterministic artiÔ¨Åcial intelligence for unmanned under-
+                                                                                                                                         water vehicles (UUV), Journal of Marine Science and Engineering 8 (8) (2020) 578,
+Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ + 1|Ì†µÌ±ò + 1), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ñ + 1|Ì†µÌ±ò + 1)) ‚àí Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ñ + 1|Ì†µÌ±ò), Ì†µÌ≤ñ‚àó(Ì†µÌ±ò + Ì†µÌ±ñ + 1|Ì†µÌ±ò))                                       https://doi.org/10.3390/jmse8080578.
+   ‚©Ω Ì†µÌ∞øÌ†µÌ±éÌ†µÌ±®Ì†µÌ±ñÌ†µÌª∂
+                                                                                                                                  [14] E. Wilt, T. Sands, Microsatellite uncertainty control using deterministic artiÔ¨Åcial in-
+Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò + 1)) ‚àí Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò)) ‚©Ω Ì†µÌ∞øÌ†µÌ±èÌ†µÌ±®Ì†µÌ±ÅÌ†µÌ±ù‚àí1Ì†µÌª∂                                                                 telligence, Sensors 22 (22) (2022) 8723, https://doi.org/10.3390/s22228723.
+                                                                                        (B.3)
+                                                                                                                                  [15] T. Sands, Optimization provenance of whiplash compensation for Ô¨Çexible space
+    Invoking the Assumption 8:                                                                                                           robotics, Aerospace 6 (9) (2019) 93, https://doi.org/10.3390/aerospace6090093.
+
+ŒîÌ†µÌ∞Ω (Ì†µÌ±ò) ‚©Ω Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò + 1), Ì†µÌ≤ñ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò + 1)) + Ì†µÌ∞øÌ†µÌ±ì (Ì†µÃÇÌ≤õ(Ì†µÌ±ò + Ì†µÌ±ÅÌ†µÌ±ù + 1|Ì†µÌ±ò + 1))                                     [16] T. Sands, Flattening the curve of Ô¨Çexible space robotics, Appl. Sci. 12 (6) (2022)
+                                                (                                                )                                       2992, https://doi.org/10.3390/app12062992.
+                                                  Ì†µÌ∞øÌ†µÌ±è Ì†µÌ±®Ì†µÌ±ÅÌ†µÌ±ù ‚àí1            Ì†µÌ±®Ì†µÌ±ÅÌ†µÌ±ù ‚àí1  ‚àí Ì†µÌ∞àÌ†µÌ±õÌ†µÌ±ß
+‚àí  Ì†µÌ∞øÌ†µÌ±ì     (Ì†µÃÇÌ≤õ(Ì†µÌ±ò  +   Ì†µÌ±ÅÌ†µÌ±ù|Ì†µÌ±ò   +  1))  +                       +  Ì†µÌ∞øÌ†µÌ±é    Ì†µÌ±® ‚àí     Ì†µÌ∞àÌ†µÌ±õÌ†µÌ±ß       Ì†µÌª∂                            [17] F. D√∂rÔ¨Çer, P. Tesi, C. De Persis, On the certainty-equivalence approach to direct data-
+                                                                                                                                         driven LQR design, IEEE Trans. Autom. Control 68 (12) (2023) 7989‚Äì7996, https://
+‚àí Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò), Ì†µÌ≤ñ‚àó(Ì†µÌ±ò))                                                                                                                   doi.org/10.1109/TAC.2023.3253787.
+
+‚©Ω Ì†µÌ∞øÌ†µÌ±êÌ†µÌª∂ ‚àí Ì†µÌ∞ø(Ì†µÃÇÌ≤õ(Ì†µÌ±ò), Ì†µÌ≤ñ‚àó(Ì†µÌ±ò))                                                                                                   [18] L. Yuan, L. Wang, J. Zhang, Adaptive dynamic programming base on MMC device of
+                                                                                                                                         a Ô¨Çexible high-altitude long endurance aircraft, Aerosp. Sci. Technol. (2024) 109305,
+                                                                                                    (B.4)                                https://doi.org/10.1016/j.ast.2024.109305.
+
+wheInrevoÌ†µÌ∞økÌ†µÌ±êin=gÌ†µÌ∞øAÌ†µÌ±èsÌ†µsÌ±®uÌ†µÌ±ÅmÌ†µÌ±ù‚àíp1ti+onÌ†µÌ∞ø6Ì†µÌ±é ,Ì†µÌ±®Ì†µÌ†µÌ±ÅÌ†µÌ∞øÌ†µÌ±®Ì±ù(‚àí‚àíÌ†µÃÇÌ≤õ1Ì†µÌ∞à(Ì†µ‚àíÌ±õÌ†µÌ†µÌ±ßÌ±òÌ†µÌ∞à)Ì†µÌ±õ,Ì†µÌ±ßÌ†µ.Ì≤ñ‚àó(Ì†µÌ±ò)) ‚©æ Ì†µÌ±é1‚ÄñÌ†µÌ≤õ(Ì†µÌ±ò)‚Äñ2, the Ô¨Årst diÔ¨Äer-      [19] W.B. Greer, C. Sultan, InÔ¨Ånite horizon model predictive control tracking application
+ence of Equation (B.1) is:                                                                                                               to helicopters, Aerosp. Sci. Technol. 98 (2020) 105675, https://doi.org/10.1016/j.
+                                                                                                                                         ast.2019.105675.
+ŒîÌ†µÌ±â4(Ì†µÌ±ò) = Ì†µÌ∞Ω ‚àó(Ì†µÌ±ò + 1) ‚àí Ì†µÌ∞Ω ‚àó(Ì†µÌ±ò) ‚©Ω ŒîÌ†µÌ∞Ω (Ì†µÌ±ò) ‚©Ω Ì†µÌ∞øÌ†µÌ±ê Ì†µÌª∂ ‚àí Ì†µÌ±é1‚ÄñÌ†µÌ≤õ(Ì†µÌ±ò)‚Äñ2                              (B.5)
+    Invoking Lemma 2, the proposed control strategy is ISS.                                                                       [20] Z. Wang, P. Qi, N. Bai, X. Liu, Z. Jiao, A novel aircraft anti-skid brake control method
+                                                                                                                                         based on multi-objective model predictive control for suppressing landing gear walk
+References                                                                                                                               vibration, Aerosp. Sci. Technol. 132 (2023) 108062, https://doi.org/10.1016/j.ast.
+                                                                                                                                         2022.108062.
+[1] W.-J. Li, D.-Y. Cheng, X.-G. Liu, Y.-B. Wang, W.-H. Shi, Z.-X. Tang, F. Gao, F.-M. Zeng,
+     H.-Y. Chai, W.-B. Luo, Q. Cong, Z.-L. Gao, On-orbit service (OOS) of spacecraft: a                                           [21] Y. Wang, M. Pan, W. Zhou, J. Huang, Direct thrust control for variable cycle engine
+     review of engineering developments, Prog. Aerosp. Sci. 108 (2019) 32‚Äì120, https://                                                  based on fractional order PID-nonlinear model predictive control under oÔ¨Ä-nominal
+     doi.org/10.1016/j.paerosci.2019.01.004.                                                                                             operation conditions, Aerosp. Sci. Technol. 143 (2023) 108726, https://doi.org/10.
+                                                                                                                                         1016/j.ast.2023.108726.
+[2] Y. Liu, Z. Jin, L. Teng, PSO-based time optimal rapid orientation for micronano space
+     robot, IEEE Trans. Aerosp. Electron. Syst. 59 (2) (2022) 1921‚Äì1934, https://doi.org/                                         [22] T. Rybus, K. Seweryn, J.Z. Sasiadek, Control system for free-Ô¨Çoating space manipu-
+     10.1109/TAES.2022.3207124.                                                                                                          lator based on nonlinear model predictive control (NMPC), J. Intell. Robot. Syst. 85
+                                                                                                                                         (2017) 491‚Äì509, https://doi.org/10.1007/s10846-016-0396-2.
+[3] X. Shao, G. Sun, C. Xue, X. Li, Nonsingular terminal sliding mode control for free-
+     Ô¨Çoating space manipulator with disturbance, Acta Astronaut. 181 (2021) 396‚Äì404,                                              [23] R. Srivastava, R. Sah, K. Das, Nonlinear model predictive control of rotation Ô¨Çoat-
+     https://doi.org/10.1016/j.actaastro.2021.01.038.                                                                                    ing space robots for autonomous active debris removal, IFAC-PapersOnLine 55 (22)
+                                                                                                                                         (2022) 147‚Äì152, https://doi.org/10.1016/j.ifacol.2023.03.025.
+[4] Q. Yao, Robust Ô¨Ånite-time trajectory tracking control for a space manipula-
+     tor with parametric uncertainties and external disturbances, Proc. Inst. Mech.                                               [24] B.O. Koopman, Hamiltonian systems and transformation in Hilbert space, Proc. Natl.
+     Eng., G J. Aerosp. Eng. 236 (2) (2022) 396‚Äì409, https://doi.org/10.1177/                                                            Acad. Sci. 17 (5) (1931) 315‚Äì318, https://doi.org/10.1073/pnas.17.5.315.
+     09544100211014754.
+                                                                                                                                  [25] T. Chen, J. Shan, H. Wen, Koopman-operator-based attitude dynamics and control on
+[5] J. Lav√≠n-Delgado, S. Ch√°vez-V√°zquez, J. G√≥mez-Aguilar, M.O. AlassaÔ¨Å, F.E. Alsaadi,                                                   SO (3), in: Distributed Attitude Consensus of Multiple Flexible Spacecraft, Springer,
+     A.M. Ahmad, Intelligent neural integral sliding-mode controller for a space robotic                                                 2022, pp. 177‚Äì210.
+     manipulator mounted on a free-Ô¨Çoating satellite, Adv. Space Res. 71 (9) (2023)
+     3734‚Äì3747, https://doi.org/10.1016/j.asr.2022.08.053.                                                                        [26] J. Yao, Q. Hu, J. Zheng, Koopman-operator-based safe learning control for space-
+                                                                                                                                         craft attitude reorientation with angular velocity constraints, IEEE Trans. Aerosp.
+[6] B. Dou, X. Yue, Disturbance observer-based fractional-order sliding mode control for                                                 Electron. Syst. (2023), https://doi.org/10.1109/TAES.2023.3285725.
+     free-Ô¨Çoating space manipulator with disturbance, Aerosp. Sci. Technol. 132 (2023)
+     108061, https://doi.org/10.1109/ROBIO54168.2021.9739210.                                                                     [27] S. Servadio, R. Armellin, R. Linares, Koopman-operator control optimization for rel-
+                                                                                                                                         ative motion in space, J. Guid. Control Dyn. 46 (11) (2023) 2121‚Äì2132, https://
+                                                                                                                                         doi.org/10.2514/1.G007217.
+
+                                                                                                                                  [28] M. Korda, I. Meziƒá, Linear predictors for nonlinear dynamical systems: Koopman
+                                                                                                                                         operator meets model predictive control, Automatica 93 (2018) 149‚Äì160, https://
+                                                                                                                                         doi.org/10.1016/j.automatica.2018.03.046.
+
+                                                                                                                                  [29] H. Shi, M.Q.-H. Meng, Deep Koopman operator with control for nonlinear systems,
+                                                                                                                                         IEEE Robot. Autom. Lett. 7 (3) (2022) 7700‚Äì7707, https://doi.org/10.1109/LRA.
+                                                                                                                                         2022.3184036.
+
+                                                                                                                                  [30] Y. Han, W. Hao, U. Vaidya, Deep learning of Koopman representation for con-
+                                                                                                                                         trol, in: 2020 59th IEEE Conference on Decision and Control (CDC), IEEE, 2020,
+                                                                                                                                         pp. 1890‚Äì1895.
+
+                                                                                                                                  [31] W. Hao, B. Huang, W. Pan, D. Wu, S. Mou, Deep Koopman learning of nonlinear
+                                                                                                                                         time-varying systems, Automatica 159 (2024) 111372, https://doi.org/10.1016/j.
+                                                                                                                                         automatica.2023.111372.
+
+                                                                                                                                  [32] H. Chen, X. He, S. Cheng, C. Lv, Deep Koopman operator-informed safety command
+                                                                                                                                         governor for autonomous vehicles, IEEE/ASME Trans. Mechatron. (2024) 1‚Äì11,
+                                                                                                                                         https://doi.org/10.1109/TMECH.2023.3349052.
+
+                                                                                                                                  [33] Y. Xiao, X. Zhang, X. Xu, X. Liu, J. Liu, Deep neural networks with Koopman opera-
+                                                                                                                                         tors for modeling and control of autonomous vehicles, IEEE Transactions on Intelli-
+                                                                                                                                         gent Vehicles 8 (1) (2023) 135‚Äì146, https://doi.org/10.1109/TIV.2022.3180337.
+
+                                                                                                                              18
+R. Mao, T. Meng, K. Wang et al.                                                                                                                  Aerospace Science and Technology 154 (2024) 109515
+
+[34] J. Zhang, H. Wang, Online model predictive control of robot manipulator with struc-         [47] K. He, X. Zhang, S. Ren, J. Sun, Deep residual learning for image recognition, in:
+       tured deep Koopman model, IEEE Robot. Autom. Lett. 8 (5) (2023) 3102‚Äì3109,                       Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition,
+       https://doi.org/10.1109/TIV.2022.3180337.                                                        2016, pp. 770‚Äì778.
+
+[35] T. Zhao, M. Yue, J. Wang, Deep learning-based Koopman modeling for online control           [48] D. Yarotsky, Error bounds for approximations with deep relu networks, Neural Netw.
+       synthesis of nonlinear power system transient dynamics, IEEE Trans. Ind. Inform.                 94 (2017) 103‚Äì114, https://doi.org/10.1016/j.neunet.2017.07.002.
+       19 (10) (2023) 10444‚Äì10453, https://doi.org/10.1109/TII.2023.3240939.
+                                                                                                 [49] E. Yeung, S. Kundu, N. Hodas, Learning deep neural network representations for
+[36] X. Zhang, W. Pan, R. Scattolini, S. Yu, X. Xu, Robust tube-based model predictive                  Koopman operators of nonlinear dynamical systems, in: 2019 American Control Con-
+       control with Koopman operators, Automatica 137 (2022) 110114, https://doi.org/                   ference (ACC), IEEE, 2019, pp. 4832‚Äì4839.
+       10.1016/j.automatica.2021.110114.
+                                                                                                 [50] M. Li, L. Jiang, Deep learning nonlinear multiscale dynamic problems using Koop-
+[37] Z. Chen, X. Chen, J. Liu, L. Cen, W. Gui, Learning model predictive control of non-                man operator, J. Comput. Phys. 446 (2021) 110660, https://doi.org/10.1016/j.jcp.
+       linear systems with time-varying parameters using Koopman operator, Appl. Math.                  2021.110660.
+       Comput. 470 (2024) 128577, https://doi.org/10.1016/j.amc.2024.128577.
+                                                                                                 [51] X. Wang, Y. Kang, Y. Cao, Deep Koopman operator based model predictive control for
+[38] J. Fu, L. Chen, D. Zhang, J. Zhang, X. Shao, Disturbance observer-based prescribed                 nonlinear robotics systems, in: 2021 6th IEEE International Conference on Advanced
+       performance predictive control for spacecraft on-orbit inspection, J. Guid. Control              Robotics and Mechatronics (ICARM), IEEE, 2021, pp. 931‚Äì936.
+       Dyn. 45 (10) (2022) 1873‚Äì1889, https://doi.org/10.2514/1.G006406.
+                                                                                                 [52] D.P. Kingma, J. Ba, Adam: a method for stochastic optimization, preprint, arXiv:
+[39] X. Zhu, C. Ding, C. Ren, T. Zhang, L. Jia, L. Wu, Implementation of a robust                       1412.6980, 2014.
+       data-driven control approach for an ommi-directional mobile manipulator based on
+       Koopman operator, Meas. Control 55 (9‚Äì10) (2022) 1143‚Äì1154, https://doi.org/10.           [53] L. Song, J. Wang, J. Xu, A data-eÔ¨Écient reinforcement learning method based on
+       1177/00202940221094843.                                                                          local Koopman operators, in: 2021 20th IEEE International Conference on Machine
+                                                                                                        Learning and Applications (ICMLA), IEEE, 2021, pp. 515‚Äì520.
+[40] C. Ren, H. Jiang, C. Li, W. Sun, S. Ma, Koopman-operator-based robust data-driven
+       control for wheeled mobile robots, IEEE/ASME Trans. Mechatron. 28 (1) (2022)              [54] S. Shao, M. Chen, Y. Zhang, Adaptive discrete-time Ô¨Çight control using disturbance
+       461‚Äì472, https://doi.org/10.1109/TMECH.2022.3203518.                                             observer and neural networks, IEEE Trans. Neural Netw. Learn. Syst. 30 (12) (2019)
+                                                                                                        3708‚Äì3721, https://doi.org/10.1109/TNNLS.2019.2893643.
+[41] R. Jin, P. Rocco, X. Chen, Y. Geng, LPV-based oÔ¨Ñine model predictive control
+       for free-Ô¨Çoating space robots, IEEE Trans. Aerosp. Electron. Syst. 57 (6) (2021)          [55] J. Sarangapani, Neural Network Control of Nonlinear Discrete-Time Systems, CRC
+       3896‚Äì3904, https://doi.org/10.1109/TAES.2021.3083408.                                            Press, 2018.
+
+[42] S.R. Nekoo, Output- and state-dependent Riccati equation: an output feedback con-           [56] G. Pin, D.M. Raimondo, L. Magni, T. Parisini, Robust model predictive control of non-
+       troller design, Aerosp. Sci. Technol. 126 (2022) 107649, https://doi.org/10.1016/j.              linear systems with bounded and state-dependent uncertainties, IEEE Trans. Autom.
+       ast.2022.107649.                                                                                 Control 54 (7) (2009) 1681‚Äì1687, https://doi.org/10.1109/TAC.2009.2020641.
+
+[43] Y. Liu, X. Wang, Z. Tang, N. Qi, Probabilistic ensemble neural network model for            [57] D.L. Marruedo, T. Alamo, E.F. Camacho, Input-to-State Stable MPC for Constrained
+       long-term dynamic behavior prediction of free-Ô¨Çoating space manipulators, Aerosp.                Discrete-Time Nonlinear Systems with Bounded Additive Uncertainties, Proceed-
+       Sci. Technol. 119 (2021) 107138, https://doi.org/10.1016/j.ast.2021.107138.                      ings of the 41st IEEE Conference on Decision and Control, vol. 4, IEEE, 2002,
+                                                                                                        pp. 4619‚Äì4624.
+[44] W. Lu, G. Huang, J. Wang, S. Hong, Spatio-temporal dynamic mode decomposition
+       in a shear layer Ô¨Çow, Aerosp. Sci. Technol. 91 (2019) 263‚Äì271, https://doi.org/10.        [58] J. Virgili-Llop, et al., SPART: an open-source modeling and control toolkit for mobile-
+       1016/j.ast.2019.05.035.                                                                          base robotic multibody systems with kinematic tree topologies, https://github.com/
+                                                                                                        NPS-SRL/SPART.
+[45] N.F. Giannelis, O. Levinski, G.A. Vio, Origins of atypical shock buÔ¨Äet motions on a
+       supercritical aerofoil, Aerosp. Sci. Technol. 107 (2020) 106304, https://doi.org/10.      [59] D. Csercsik, P. K√°d√°r, Performance analysis of Matlab solvers in the case of
+       1016/j.ast.2020.106304.                                                                          a quadratic programming generation scheduling optimization problem, World
+                                                                                                        Academy of Science, Engineering and Technology, International Journal of Energy
+[46] B. Lusch, J.N. Kutz, S.L. Brunton, Deep learning for universal linear embeddings                   and Power Engineering 4 (2017) 8‚Äì12, https://api.semanticscholar.org/CorpusID:
+       of nonlinear dynamics, Nat. Commun. 9 (1) (2018) 4950, https://doi.org/10.1038/                  64441972.
+       s41467-018-07210-0.
+                                                                                                 [60] H. Alzer, M.K. Kwong, On Young‚Äôs inequality, J. Math. Anal. Appl. 469 (2) (2019)
+                                                                                                        480‚Äì492, https://doi.org/10.1016/j.jmaa.2018.06.061.
+
+                                                                                             19
+

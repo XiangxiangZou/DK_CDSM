@@ -1,0 +1,44 @@
+# 本地文献与生成产物
+assets/references/literature/
+outputs/data/
+outputs/models/
+outputs/results/
+outputs/figures/
+outputs/simulation_logs/
+outputs/presentations/
+
+# 图片/视频类二进制文件
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.mp4
+*.avi
+
+# 文献/文档类
+*.pdf
+*.doc
+*.docx
+*.ppt
+*.pptx
+
+# 仿真/数据集/模型权重
+*.npz
+*.npy
+*.csv
+*.mat
+*.pth
+*.pt
+*.ckpt
+
+# Python编译产物
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+
+# 日志文件
+logs/
+*.log

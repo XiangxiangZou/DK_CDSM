@@ -1,0 +1,716 @@
+                 ARTICLE
+
+                 DOI: 10.1038/s41467-018-07210-0  OPEN
+
+                 Deep learning for universal linear embeddings
+
+                 of nonlinear dynamics
+
+                 Bethany Lusch 1,2, J. Nathan Kutz1 & Steven L. Brunton1,2
+
+1234567890():,;  Identifying coordinate transformations that make strongly nonlinear dynamics approximately
+                 linear has the potential to enable nonlinear prediction, estimation, and control using linear
+                 theory. The Koopman operator is a leading data-driven embedding, and its eigenfunctions
+                 provide intrinsic coordinates that globally linearize the dynamics. However, identifying and
+                 representing these eigenfunctions has proven challenging. This work leverages deep learning
+                 to discover representations of Koopman eigenfunctions from data. Our network is parsi-
+                 monious and interpretable by construction, embedding the dynamics on a low-dimensional
+                 manifold. We identify nonlinear coordinates on which the dynamics are globally linear using a
+                 modiﬁed auto-encoder. We also generalize Koopman representations to include a ubiquitous
+                 class of systems with continuous spectra. Our framework parametrizes the continuous fre-
+                 quency using an auxiliary network, enabling a compact and efﬁcient embedding, while con-
+                 necting our models to decades of asymptotics. Thus, we beneﬁt from the power of deep
+                 learning, while retaining the physical interpretability of Koopman embeddings.
+
+                 1 Department of Applied Mathematics, University of Washington, Seattle, WA 98195, USA. 2 Department of Mechanical Engineering, University of
+                 Washington, Seattle, WA 98195, USA. Correspondence and requests for materials should be addressed to B.L. (email: herwaldt@uw.edu)
+
+                 NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications                                  1
+ARTICLE                                                                 NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0
+
+Nonlinearity is a hallmark feature of complex systems,               powered by the rise of big data and increased computational
+         giving rise to a rich diversity of observed dynamical       power, deep learning is resulting in transformative progress in
+         behaviors across the physical, biological, and engineering  many data-driven classiﬁcation and identiﬁcation tasks19–21. A
+sciences1,2. Although computationally tractable, there exists no     strength of deep learning is that features of the data are built
+general mathematical framework for solving nonlinear dynamical       hierarchically, which enables the representation of complex
+systems. Thus representing nonlinear dynamics in a linear fra-       functions. Thus, deep learning can accurately ﬁt functions with-
+mework is particularly appealing because of powerful and com-        out hand-designed features or the user choosing a good basis21.
+prehensive techniques for the analysis and control of linear         However, a current challenge in deep learning research is the
+systems3, which do not readily generalize to nonlinear systems.      identiﬁcation of parsimonious, interpretable, and transferable
+Koopman operator theory, developed in 19314,5, has recently          models22.
+emerged as a leading candidate for the systematic linear repre-
+sentation of nonlinear systems6,7. This renewed interest in             Deep learning has the potential to enable a scaleable and data-
+Koopman analysis has been driven by a combination of theore-         driven architecture for the discovery and representation of
+tical advances6–10, improved numerical methods such as dynamic       Koopman eigenfunctions, providing intrinsic linear representa-
+mode decomposition (DMD)11–13, and an increasing abundance           tions of strongly nonlinear systems. This approach alleviates two
+of data. Eigenfunctions of the Koopman operator are now widely       key challenges in modern dynamical systems: (1) equations are
+sought, as they provide intrinsic coordinates that globally line-    often unknown for systems of interest23–25, as in climate, neu-
+arize nonlinear dynamics. Despite the immense promise of             roscience, epidemiology, and ﬁnance; and, (2) low-dimensional
+Koopman embeddings, obtaining representations has proven             dynamics are typically embedded in a high-dimensional state
+difﬁcult in all but the simplest systems, and representations are    space, requiring scaleable architectures that discover dynamics on
+often intractably complex or are the output of uninterpretable       latent variables. Although NNs have also been used to model
+black-box optimizations. In this work, we utilize the power of       dynamical systems26 and other physical processes27 for decades,
+deep learning for ﬂexible and general representations of the         great strides have been made recently in using DNNs to learn
+Koopman operator, while enforcing a network structure that           Koopman embeddings, resulting in several excellent papers28–33.
+promotes parsimony and interpretability of the resulting models.     For example, the VAMPnet architecture28,29 uses a time-lagged
+                                                                     auto-encoder and a custom variational score to identify Koopman
+   Neural networks (NNs), which form the theoretical archi-          coordinates on an impressive protein folding example. In all of
+tecture of deep learning, were inspired by the primary visual        these recent studies, DNN representations have been shown to be
+cortex of cats where neurons are organized in hierarchical layers    more ﬂexible and exhibit higher accuracy than other leading
+of cells to process visual stimulus14. The ﬁrst mathematical model   methods on challenging problems.
+of a NN was the neocognitron15 which has many of the features
+of modern deep neural networks (DNNs), including a multi-layer          The focus of this work is on developing DNN representations
+structure, convolution, max pooling, and nonlinear dynamical         of Koopman eigenfunctions that remain interpretable and par-
+nodes. Importantly, the universal approximation theorem16–18         simonious, even for high-dimensional and strongly nonlinear
+guarantees that a NN with sufﬁciently many hidden units and a        systems. Our approach (see Fig. 1) differs from previous studies,
+linear output layer is capable of representing any arbitrary         as we are focused speciﬁcally on obtaining parsimonious models
+function, including our desired Koopman eigenfunctions.              that match the intrinsic low-rank dynamics while avoiding
+Although NNs have a four-decade history, the analysis of the         overﬁtting and remaining interpretable, thus merging the best of
+ImageNet data set19, containing over 15 million labeled images in    DNN architectures and Koopman theory. In particular, many
+22,000 categories, provided a watershed moment20. Indeed,            dynamical systems exhibit a continuous eigenvalue spectrum,
+                                                                     which confounds low-dimensional representation using existing
+
+   a
+
+                         Input xk                       …• • •          yk                      •••     Output xk
+                                                                                                •••              yk+1
+                                                        …• • •                                  •••
+                                                                                                •••
+         Autoencoder:                                   …• • •                                  •••
+
+         –1( (xk)) = xk                                 …• • •                 Decoder x = –1(y)
+                                                                            Linearity: K (xk) = (xk+1)
+             yk                                         …• • •              Network outputs equivalent
+
+                                   Encoder y = (x)                                yk yk+1 xk+1
+
+    b                    Prediction: –1(K (xk)) = xk+1               c
+
+   Input xk                                   yk+1      Output xk+1 xk
+                                        yk yk+1
+
+                                   –1
+
+                         K linear                                           K
+
+Fig. 1 Diagram of our deep learning schema to identify Koopman eigenfunctions φ(x). a Our network is based on a deep auto-encoder, which is able to
+identify intrinsic coordinates y = φ(x) and decode these coordinates to recover x = φ−1(y). b, c We add an additional loss function to identify a linear
+
+Koopman model K that advances the intrinsic variables y forward in time. In practice, we enforce agreement with the trajectory data for several iterations
+through the dynamics, i.e. Km. In b, the loss function is evaluated on the state variable x and in c it is evaluated on y
+
+2                NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications
+NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0                                                       ARTICLE
+
+DNN or Koopman representations. This work develops a gen-                Finite-dimensional representations of the Koopman operator
+eralized framework and enforces new constraints speciﬁcally           are often approximated using the DMD12,13, introduced by
+designed to extract the fewest meaningful eigenfunctions in an        Schmid11. By construction, DMD identiﬁes spatio-temporal
+interpretable manner. For systems with continuous spectra, we         coherent structures from a high-dimensional dynamical system,
+utilize an augmented network to parameterize the linear               although it does not generally capture nonlinear transients since
+dynamics on the intrinsic coordinates, avoiding an inﬁnite            it is based on linear measurements of the system, g(x) = x.
+asymptotic expansion in harmonic eigenfunctions. Thus, the            Extended DMD (eDMD) and the related variational approach of
+resulting networks remain parsimonious, and the few key               conformation dynamics (VAC)34–36 enriches the model with
+eigenfunctions are interpretable. We demonstrate our deep             nonlinear measurements33,37. It has recently been shown that
+learning approach to Koopman on several examples designed to          eDMD is equivalent to the variational approach of conformation
+illustrate the strength of the method, while remaining intuitive in   dynamics (VAC)34–36, ﬁrst derived by Noé and Nüske in 2013 to
+terms of classic dynamical systems.                                   simulate molecular dynamics with a broad separation of time-
+                                                                      scales. Further connections between eDMD and VAC and
+Results                                                               between DMD and the time lagged independent component
+                                                                      analysis (TICA) are explored in a recent review38. A key
+Data-driven dynamical systems. To give context to our deep            contribution of VAC is a variational score enabling the objective
+learning approach to identify Koopman eigenfunctions, we ﬁrst         assessment of Koopman models via cross-validation. Recently,
+summarize highlights and challenges in the data-driven discovery      eDMD has been demonstrated to improve model predictive
+of dynamics. Throughout this work, we will consider discrete-         control performance in nonlinear systems39.
+time dynamical systems
+                                                                         Identifying regression models based on nonlinear measure-
+xkþ1 ¼ FðxkÞ;                                            ð1Þ          ments will generally result in closure issues, as there is no
+                                                                      guarantee that these measurements form a Koopman invariant
+where x 2 Rn is the state of the system and F represents the          subspace40. The resulting models are of exceedingly high
+dynamics that map the state of the system forward in time.            dimension, and when kernel methods are employed41, the models
+Discrete-time dynamics often describe a continuous-time system        may become uninterpretable. Instead, many approaches seek to
+that is sampled discretely in time, so that xk = x(kΔt) with sam-     identify eigenfunctions of the Koopman operator directly,
+pling time Δt. The dynamics in F are generally nonlinear, and the     satisfying:
+state x may be high dimensional, although we typically assume
+that the dynamics evolve on a low-dimensional attractor gov-          φðxkþ1Þ ¼ KφðxkÞ ¼ λφðxkÞ:              ð3Þ
+erned by persistent coherent structures in the state space2. Note
+that F is often unknown and only measurements of the dynamics         Eigenfunctions are guaranteed to span an invariant subspace, and
+are available.                                                        the Koopman operator will yield a matrix when restricted to this
+                                                                      subspace40,42. In practice, Koopman eigenfunctions may be more
+   The dominant geometric perspective of dynamical systems, in        difﬁcult to obtain than the solution of (1); however, this is a one-
+the tradition of Poincaré, concerns the organization of trajectories  time up-front cost that yields a compact linear description. The
+of Eq. (1), including ﬁxed points, periodic orbits, and attractors.   challenge of identifying and representing Koopman eigenfunc-
+Formulating the dynamics as a system of differential equations in     tions provides strong motivation for the use of powerful emerging
+x often admits compact and efﬁcient representations for many          deep learning methods28–33.
+natural systems25; for example, Newton's second law is naturally
+expressed by Eq. (1). However, the solution to these dynamics         Koopman for systems with continuous spectra. The Koopman
+may be arbitrarily complicated, and possibly even irrepresentable,    operator provides a global linearization of the dynamics. The
+except for special classes of systems. Linear dynamics, where the     concept of linearizing dynamics is not new, and locally linear
+map F is a matrix that advances the state x, are among the few        representations are commonly obtained by linearizing around
+systems that admit a universal solution, in terms of the              ﬁxed points and periodic orbits1. Indeed, asymptotic and per-
+eigenvalues and eigenvectors of the matrix F, also known as the       turbation methods have been widely used since the time of
+spectral expansion.                                                   Newton to approximate solutions of nonlinear problems by
+                                                                      starting from the exact solution of a related, typically linear
+Koopman operator theory. In 1931, B.O. Koopman provided an            problem. The classic pendulum, for instance, satisﬁes the differ-
+alternative description of dynamical systems in terms of the          ential equation €x ¼ ÀsinðωxÞ and has eluded an analytic solution
+evolution of functions in the Hilbert space of possible measure-      since its mathematical inception. The linear problem associated
+ments y = g(x) of the state4. The so-called Koopman operator, K,      with the pendulum involves the small angle approximation
+that advances measurement functions is an inﬁnite-dimensional         whereby sin(ωx) = ωx − (ωx)3/3! + …; and only the ﬁrst term is
+linear operator:                                                      retained in order to yield exact sinusoidal solutions. The next
+                                                                      correction involving the cubic term gives the Dufﬁng equation,
+Kg ¼Δ g  F ) KgðxkÞ ¼ gðxkþ1Þ:                          ð2Þ          which is one of the most commonly studied nonlinear oscillators
+                                                                      in physics1. Importantly, the cubic contribution is known to shift
+Koopman analysis has gained signiﬁcant attention recently with        the linear oscillation frequency of the pendulum, ω → ω + Δω, as
+the pioneering work of Mezic et al.6–10, and in response to the       well as generate harmonics such as exp(±3iω)43,44. An exact
+growing wealth of measurement data and the lack of known              representation of the solution can be derived in terms of Jacobi
+equations for many systems13,25. Representing nonlinear               elliptic functions, which have a Taylor series representation in
+dynamics in a linear framework, via the Koopman operator, has         terms of an inﬁnite sum of sinusoids with frequencies (2n − 1)ω,
+the potential to enable advanced nonlinear prediction, estimation,    where n = 1,2,…,∞. Thus, the simple pendulum oscillates at the
+and control using the comprehensive theory developed for linear       (linear) natural frequency ω for small deﬂections, and as the
+systems. However, obtaining ﬁnite-dimensional approximations          pendulum energy is increased, the frequency decreases con-
+of the inﬁnite-dimensional Koopman operator has proven chal-          tinuously, resulting in a so-called continuous spectrum.
+lenging in practical applications.
+
+NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications  3
+ARTICLE                                                                        NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0
+
+   The importance of accounting for the continuous spectrum                    to handle a ubiquitous class of nonlinear systems characterized by
+was discussed in 1932 in an extension by Koopman and von                       a continuous frequency spectrum generated by the nonlinearity.
+Neumann5. A continuous spectrum, as described for the simple                   A continuous spectrum presents unique challenges for compact
+pendulum, is characterized by a continuous range of observed                   and interpretable representation, and our approach is inspired by
+frequencies, as opposed to the discrete spectrum consisting of                 the classical asymptotic and perturbation approaches in dyna-
+isolated, ﬁxed frequencies. This phenomena is observed in a wide               mical systems.
+range of physical systems that exhibit broadband frequency
+content, such as turbulence and nonlinear optics. The continuous                  Our core network architecture is shown in Fig. 1, and it is
+spectrum thus confounds simple Koopman descriptions, as there                  modiﬁed in Fig. 2 to handle the continuous spectrum. The
+is not a straightforward ﬁnite approximation in terms of a small               objective of this network is to identify a few key intrinsic
+number of eigenfunctions10. Indeed, away from the linear regime,               coordinates y = φ(x) spanned by a set of Koopman eigenfunc-
+an inﬁnite Fourier sum is required to approximate the shift in                 tions φ : Rn ! Rp, along with a dynamical system yk+1 = Kyk.
+frequency and eigenfunctions. In fact, in some cases, eigenfunc-               There are three high-level requirements for the network,
+tions may not exist at all.                                                    corresponding to three types of loss functions used in training:
+
+   Recently, there have been several algorithmic advances to                   1. Intrinsic coordinates that are useful for reconstruction. We
+approximate systems with continuous spectra, including non-                         seek to identify a few intrinsic coordinates y = φ(x) where the
+linear Laplacian spectral analysis45 and the use of delay                           dynamics evolve, along with an inverse x = φ−1(y) so that the
+coordinates46,47. A critically enabling innovation of the present
+work is explicitly accounting for the parametric dependence of                 state x may be recovered. This is achieved using an auto-
+the Koopman operator K(λ) on the continuously varying λ,                       encoder (see Fig. 1a), where φ is the encoder and φ−1 is the
+related to the classic perturbation results above. By constructing
+an auxiliary network (see Fig. 2) to ﬁrst determine the parametric             decoder. The dimension p of the auto-encoder subspace is a
+dependency of the Koopman operator on the frequency λ± = ±iω,
+an interpretable low-rank model of the intrinsic dynamics can                  hyperparameter of the network, and this choice may be
+then be constructed. In particular, a nonlinear oscillator with
+continuous spectrum may now be represented as a single pair of                 guided by knowledge of the system. Reconstruction accuracy
+conjugate eigenfunctions, mapping trajectories into perfect sines
+and cosines, with a continuous eigenvalue parameterizing the                   of the auto-encoder is achieved using the following loss:
+frequency. If this explicit frequency dependence is unaccounted                kx À φÀ1ðφðxÞÞk.
+for, then a high-dimensional network is necessary to account for
+the shifting frequency and eigenvalues. We conjecture that                     2. Linear dynamics. To discover Koopman eigenfunctions, we
+previous Koopman models using high-dimensional DNNs
+represent the harmonic series expansion required to approximate                learn the linear dynamics K on the intrinsic coordinates, i.e.,
+the continuous spectrum for systems such as the Dufﬁng
+oscillator.                                                                    yk+1   =φKðxykkþ. L1ÞinÀeaKr φdðyxnkaÞm.icMs aorree  achieved using the following
+                                                                               loss:                                                    generally, we enforce linear
+Deep learning to identify Koopman eigenfunctions. The over-
+arching goal of this work is to leverage the power of deep learning            prφeðdxikcþtimoÞnÀ  KomvφerðxkÞm.    time             steps  with                                       the  loss:
+to discover and represent eigenfunctions of the Koopman                                                               (see Fig.         1c).
+operator. Our perspective is driven by the need for parsimonious
+representations that are efﬁcient, avoid overﬁtting, and provide               3. Future state prediction. Finally, the intrinsic coordinates
+minimal descriptions of the dynamics on interpretable intrinsic
+coordinates. Unlike previous deep learning approaches to                       must enable future state prediction. Speciﬁcally, we identify
+Koopman28–31, our network architecture is designed speciﬁcally
+                                                                               linxxkkeþþarm1 ÀdÀynφφaÀÀm11ððiKcKsφmiðnφxðktxhÞkÞeÞÞm,a. t(rsiexeKaFn.idTg.h1isb)c.ormreosrpeonds  to the loss
+                                                                                                                                                                                            generally
+
+                                                                               Our norm kÁk is mean-squared error, averaging over dimen-
+
+                                                                               sion then number of examples, and we add ‘2 regularization.
+                                                                                  To address the continuous spectrum, we allow the eigenvalues
+
+                                                                               of the matrix K to vary, parametrized by the function λ = Λ(y),
+
+                                                                               which is learned by an auxiliary network (see Fig. 2). The
+
+                                                                               eigenvalues λ± = μ ± iω are then used to parametrize block-
+                                                                               diagonal K(μ,ω). For each pair of complex eigenvalues, the
+
+                                                                               discrete-time K has a Jordan block of the form:
+
+                                                                                      Bðμ; ωÞ ¼ expðμΔtÞ              cosðωΔtÞ ÀsinðωΔtÞ !                                                 :    ð4Þ
+
+                                                                                                                      sinðωΔtÞ cosðωΔtÞ
+
+   xk    yk  yk+1      xk+1
+
+                   –1                                                             This network structure allows the eigenvalues to vary across
+                                                                               phase space, facilitating a small number of eigenfunctions. To
+                                                  K( )                         eonftfeonrcpeacriarmcueltaerriszyemthmeeteriygeinnvathlueeseigbeynftuhnecrtiaodniucsoλoÀrdkyinka22tÁe.s,Twhee
+                                                                               second and third prediction loss function must also be modiﬁed
+                                                   Λ                           for systems with continuous spectrum, as discussed in the
+                                                                               Methods section.
+Fig. 2 Schematic of modiﬁed schema with auxiliary network to identify
+(parametrize) the continuous eigenvalue spectrum λ. This facilitates an           To train our network, we generate trajectories from random
+aggressive dimensionality reduction in the auto-encoder, avoiding the need     initial conditions, which are split into training, validation, and
+for higher harmonics of the fundamental frequency that are generated by        test sets. Models are trained on the training set and compared on
+the nonlinearity43, 44. For purely oscillatory motion, as in the pendulum, we  the validation set, which is also used for early stopping to prevent
+identify the continuous frequency λ± = ±iω                                     overﬁtting. We report accuracy on the test set.
+
+                                                                               Demonstration on examples. We demonstrate our deep learning
+                                                                               approach to identify Koopman eigenfunctions on several example
+                                                                               systems, including a simple model with a discrete spectrum and
+                                                                               two examples that exhibit a continuous spectrum: the nonlinear
+
+4            NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications
+NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0                                                                                  ARTICLE
+
+Table 1 Errors for each problem                                            parsimonious representation in the Koopman framework. The
+                                                                           deep Koopman embedding is shown in Fig. 4, where it is clear
+            Discrete          Pendulum Fluid ﬂow 1 Fluid ﬂow 2             that the dynamics are linear in the eigenfunction coordinates,
+                                                                           given by y = φ(x). As the Hamiltonian energy of the system
+Training    spectrum          8.5 × 10−8 5.4 × 10−7  2.8 × 10−6            increases, corresponding to an elongation of the oscillation per-
+Validation                    9.4 × 10−8 5.4 × 10−7  2.9 × 10−6            iod, the parameterized Koopman network accounts for this
+Test        1.4 × 10−7        1.1 × 10−7 5.5 × 10−7  2.9 × 10−6            continuous frequency shift and provides a compact representa-
+            1.4 × 10−7                                                     tion in terms of two conjugate eigenfunctions. Alternative net-
+            1.5 × 10−7                                                     work architectures that are not speciﬁcally designed to account
+                                                                           for continuous spectra with an auxiliary network would be forced
+            x2                              y2                             to approximate this frequency shift with the classical asymptotic
+                                                                           expansion in terms of harmonics. The resulting network would be
+                          x1                                          y1   overly bulky and would limit interpretability.
+
+Fig. 3 Demonstration of neural network embedding of Koopman                   Recall that we have three types of losses on the network:
+eigenfunctions for simple system with a discrete eigenvalue spectrum       reconstruction, prediction, and linearity. Figure 4b shows that the
+                                                                           network is able to function as an auto-encoder, accurately
+pendulum and the high-dimensional unsteady ﬂuid ﬂow past a                 reconstructing the 10 example trajectories. Next, we show that the
+cylinder. The training, validation, and test errors for all examples       network is able to predict the evolution of the system. Figure 4c
+are reported in Table 1. Additional details for each example are           shows the prediction horizon for 10 initial conditions that are
+provided in Supplementary Note 1.                                          simulated forward with the network, stopping the prediction
+                                                                           when the relative error reaches 10%. As expected, the prediction
+Example 1: Simple model with discrete spectrum. Before ana-                horizon deteriorates as the energy of the initial condition
+lyzing systems with the additional challenges of a continuous              increases, although the prediction is still quite accurate. The
+spectrum and high-dimensionality, we consider a simple non-                nearly concentric circles in Fig. 4d demonstrate that the dynamics
+linear system with a single ﬁxed point and a discrete eigenvalue           in the intrinsic coordinates y are truly linear.
+spectrum:
+                                                                              In this example, both the eigenfunctions and the eigenvalues
+                          x_1 ¼ μx1                                   ð5Þ  are spatially varying. When originally designing the Koopman
+                                                                           network, we did not impose any constraints on how these
+                        x_2 ¼ λðx2 À x12Þ:                            ð6Þ  eigenfunctions and eigenvalues vary in space, and the resulting
+                                                                           network did not converge to a unique and interpretable solution.
+This dynamical system has been well-studied in the literature40,48,        This led us to decide on an important design constraint, that a
+and for stable eigenvalues λ < μ < 0, the system exhibits a slow           nonlinear oscillator, like the pendulum, should map to coordi-
+manifold given by x2 ¼ x12; we use μ = −0.05 and λ = −1. As                nates that have radial symmetry, so that the spatial variation of
+shown in Fig. 3, the Koopman embedding identiﬁes nonlinear                 the eigenfunctions and eigenvalues depends on the radius of the
+coordinates that ﬂatten this inertial manifold, providing a globally       intrinsic coordinates.
+linear representation of the dynamics; moreover, the correct
+Koopman eigenvalues are identiﬁed. Speciﬁc details about the                  The eigenfunctions φ1(x) and φ2(x) are shown in Fig. 4e. It is
+network and training procedure are provided in the Methods.                possible to map these eigenfunctions into magnitude and phase
+                                                                           coordinates, as shown in Fig. 5, where it can be seen that that
+   In this example, we include the auxiliary network even though           magnitude essentially traces level sets of the Hamiltonian energy.
+it is not required for examples with discrete eigenvalues. As              This is consistent with previous theoretical derivations of Mezić49
+shown in Supplementary Fig. 3, although the eigenvalues have the           that represent Koopman eigenfunctions in action–angle coordi-
+freedom to vary, they stay in a narrow range around the correct            nates, and we thank him for communicating this connection to
+values. This numerically demonstrates that it is possible to               us.
+identify a discrete spectrum without a priori knowledge about
+whether the spectrum is continuous or discrete.                            Example 3: High-dimensional nonlinear ﬂuid ﬂow. As our ﬁnal
+                                                                           example, we consider the nonlinear ﬂuid ﬂow past a circular
+                                                                           cylinder at Reynolds number 100 based on diameter, which is
+                                                                           characterized by vortex shedding. This model has been a
+                                                                           benchmark in ﬂuid dynamics for decades50, and has been
+                                                                           extensively analyzed in the context of data-driven
+                                                                           modeling25,51 and Koopman analysis52. In 2003, Noack
+                                                                           et al.50 showed that the high-dimensional dynamics evolve on
+                                                                           a low-dimensional attractor, given by a slow-manifold in the
+                                                                           following model:
+
+                                                                           x_1 ¼ μx1 À ωx2 þ Ax1x3                                       ð8Þ
+
+Example 2: Nonlinear pendulum with continuous spectrum. As                 x_2 ¼ ωx1 þ μx2 þ Ax2x3                                       ð9Þ
+
+a second example, we consider the nonlinear pendulum, which
+
+exhibits a continuous eigenvalue spectrum with increasing                  x_ 3  ¼                               À   À  x12  À  x22  Á   ð10Þ
+                                                                                                              Àλ x3                   :
+energy:
+
+            €x ¼ ÀsinðxÞ  )      & x_1 ¼ x2                           ð7Þ     This mean-ﬁeld model exhibits a stable limit cycle correspond-
+                                   x_2 ¼ Àsinðx1Þ:                         ing to von Karman vortex shedding, and an unstable equilibrium
+                                                                           corresponding to a low-drag condition. Starting near this
+Although this is a simple mechanical system, it has eluded
+
+NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications                             5
+ARTICLE                                                                        NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0
+
+             a                             x2 = ⋅                         b    x2                                       e
+
+                   x1                                               x1 =                             x1
+                  x2                                                           x2
+                                Potential                                   c
+
+                                                                    x1             x1
+
+                                                                                                                           −0.09  0  0.09
+
+                                                                 t        d    y2
+
+                                                                                                                    y1
+                                                                 t
+
+Fig. 4 Illustration of deep Koopman eigenfunctions for the nonlinear pendulum. The pendulum, although a simple mechanical system, exhibits a continuous
+spectrum, making it difﬁcult to obtain a compact representation in terms of Koopman eigenfunctions. However, by leveraging a generalized network, as in
+Fig. 2, it is possible to identify a parsimonious model in terms of a single complex conjugate pair of eigenfunctions, parameterized by the frequency ω. In
+eigenfunction coordinates, the dynamics become linear, and orbits are given by perfect circles. For the sake of visualization, we use 10 evenly spaced
+trajectories instead of the random trajectories in the testing set
+
+                                                                               capture nonlinear transients, as long as these are sufﬁciently
+                                                                               represented in the training data.
+
+                       2  +  2                     tan–1( 1/ 2)                Discussion
+                       1     2
+                                                                               In summary, we have employed powerful deep learning approa-
+   0 0.0044 0.0088                         –       0                           ches to identify and represent coordinate transformations that
+                                                                               recast strongly nonlinear dynamics into a globally linear frame-
+Fig. 5 Magnitude and phase of the pendulum eigenfunctions                      work. Our approach is designed to discover eigenfunctions of the
+                                                                               Koopman operator, which provide an intrinsic coordinate system
+equilibrium, the ﬂow unwinds up the slow manifold toward the                   to linearize nonlinear systems, and have been notoriously difﬁcult
+limit cycle. In51, Loiseau and Brunton showed that this ﬂow may                to identify and represent using alternative methods. Building on a
+be modeled by a nonlinear oscillator with state-dependent                      deep auto-encoder framework, we enforce additional constraints
+damping, making it amenable to the continuous spectrum                         and loss functions to identify Koopman eigenfunctions where the
+analysis. We use trajectories from this model where μ = 0.1, ω                 dynamics evolve linearly. Moreover, we generalize this framework
+= 1, A = −0.1, and λ = 10 to train a Koopman network. The                      to include a broad class of nonlinear systems that exhibit a
+resulting eigenfunctions are shown in Fig. 6.                                  continuous eigenvalue spectrum, where a continuous range of
+                                                                               frequencies is observed. Continuous-spectrum systems are
+   In this example, the damping rate μ and frequency ω are                     notoriously difﬁcult to analyze, especially with Koopman theory,
+allowed to vary along level sets of the radius in eigenfunction                and naive learning approaches require asymptotic expansions in
+coordinates, so that μ(R) and ω(R), where R2 ¼ y12 þ y22; this is              terms of higher order harmonics of the fundamental frequency,
+accomplished with an auxiliary network as in Fig. 2. These                     leading to unwieldy models. In contrast, we utilize an auxiliary
+continuously varying eigenvalues are shown in Supplementary                    network to parametrize and identify the continuous frequency,
+Fig. 5, where it can be seen that the frequency ω is extremely close           which then parameterizes a compact Koopman model on the
+to the true constant −1, while the damping μ varies signiﬁcantly,              auto-encoder coordinates. Thus, our deep neural network models
+and in fact switches stability for trajectories outside the natural            remain both parsimonious and interpretable, merging the best of
+limit cycle. This is consistent with the data-driven model of                  neural network representations and Koopman embeddings. In
+Loiseau and Brunton51.                                                         most deep learning applications, although the basic architecture is
+                                                                               extremely general, considerable expert knowledge and intuition is
+   Although we only show the ability of the model to predict the               typically used in the training process and in designing loss
+future state in Fig. 6, corresponding to the second and third loss             functions and constraints. Throughout this paper, we have also
+functions, the network also functions as an autoencoder.                       used physical insight and intuition from asymptotic theory and
+Figure 6c shows the prediction performance of the Koopman                      continuous spectrum dynamical systems to guide the design of
+network for trajectories that start away from the attractor; in                parsimonious Koopman embeddings.
+both cases, the dynamics are faithfully captured and the
+dynamics attract onto the limit cycle. Thus, it is possible to                    There are many ongoing challenges and promising directions
+                                                                               that motivate future work. First, there are still several limitations
+                                                                               associated with deep learning, including the need for vast and
+                                                                               diverse data and extensive computation to train models53. This
+
+6                               NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications
+NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0                                                                        ARTICLE
+
+                                a                                                                             x2
+                                                                                                        ux2
+                                                                     x3
+                                         ux3
+
+                                                   ux1
+                                                                                                x1
+
+                                b
+
+                                                             y2
+
+           y1
+
+                                                                      –0.3                              0             0.3
+
+c                                                                                                   x3
+
+   x3
+
+               x2                                                                                                          x2
+
+       x1                                                                                                         x1
+
+Fig. 6 Learned Koopman eigenfunctions for the mean-ﬁeld model of ﬂuid ﬂow past a circular cylinder at Reynolds number 100. a Reconstruction of
+trajectory from linear Koopman model with two states; modes for each of the state space variables x are shown along the coordinate axes. b Koopman
+reconstruction in eigenfunction coordinates y, along with eigenfunctions y ¼ φðxÞ. c Two examples of trajectories that begin off the attractor. The Koopman
+model is able to reconstruct both given only the initial condition
+
+training may be considered a one-time upfront cost, and deep          complex eigenvalues). It will be important to extend these
+learning frameworks, such as TensorFlow parallelize the training      methods to higher-dimensional examples with more complex
+on GPUs and across GPUs54; further, there is ongoing work to          energy spectra, as the examples considered here are relatively low-
+improve the scalability53. Even more concerning is the dubious        dimensional. Fortunately, with sufﬁcient data, deep learning
+generalizability and interpretability of the resulting models, as     architectures are able to learn incredibly complex representations,
+deep learning architectures may be viewed as sophisticated            so the prospects for scaling these methods to larger systems is
+interpolation engines with limited ability to extrapolate beyond      promising.
+the training data55. This work attempts to promote interpret-
+ability by forcing the network to have physical meaning in the           The use of deep learning in physics and engineering is increasing
+context of Koopman theory, although the issue with general-           at an incredible rate, and this trend is only expected to accelerate.
+izability still requires sufﬁcient volumes and diversity of training  Nearly every ﬁeld of science is revisiting challenging problems of
+data. There are also more speciﬁc limitations to the current          central importance from the perspective of big data and deep
+proposed architecture, foremost, choosing the dimension of the        learning. With this explosion of interest, it is imperative that we as a
+autoencoder coordinates, y. Continued effort will be required to      community seek machine learning models that favor interpretability
+automatically detect the dimension of the intrinsic coordinates       and promote physical insight and intuition. In this challenge, there
+and to classify spectra (e.g., discrete and continuous, and real and  is a tremendous opportunity to gain new understanding and insight
+                                                                      by applying increasingly powerful techniques to data. For example,
+
+NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications                   7
+ARTICLE                                                                                               NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0
+
+discovering Koopman eigenfunctions will result in new symmetries                                  Table 4 Loss hyperparameters
+and conservation laws, as conserved eigenfunctions are related to
+conservation laws via a generalized Noether's theorem. It will also                                   Discrete                          Pendulum                                   Fluid            Fluid
+be important to apply these techniques to increasingly challenging                                    spectrum                                                                     ﬂow 1            ﬂow 2
+problems, such as turbulence, epidemiology, and neuroscience,
+where data is abundant and models are needed. The goal is to                                      α1  0.1                               0.001                                      0.1              0.1
+model these systems with a small number of coupled nonlinear                                                                            10−9                                       10−7             10−9
+oscillators using similar parameterized Koopman embeddings.                                       α2  10−7                              10−14                                      10−13            10−13
+Finally, the use of deep learning to discover Koopman eigenfunc-                                                                                                                   30               30
+tions may enable transformative advances in the nonlinear control                                 α3  10−15                             30
+of complex systems. All of these future directions will be facilitated
+by more powerful network representations.                                                         Sp  30
+
+                                                                                                  experiments, training was signiﬁcantly faster with ReLU as the activation function
+
+                                                                                                  than with sigmoid. See Table 3 for the number of hidden layers in the encoder,
+
+Methods                                                                                           decoder, and auxiliary network, as well as their widths. The output layers of the
+
+Creating the datasets. We create our datasets by solving the systems of differ-                   encoder, decoder, and auxiliary network are linear (simply Wx + b).
+
+ential equations in MATLAB using the ode45 solver.                                                The input to the auxiliary network is y, and it outputs the parameters for the
+
+    For each dynamical system, we choose 5000 initial conditions for the test set,                eigenvalues of K. For each complex conjugate pair of eigenvalues λ± = μ ± iω, the
+5000 for the validation set, and 5000–20,000 for the training set (see Table 2). For              network deﬁnes a function Λ mapping yj2 þ yj2þ1 to μ and ω, where yj and yj+1 are
+                                                                                                  the corresponding eigenfunctions. Similarly, for each real eigenvalue λ, the network
+each initial condition, we solve the differential equations for some time span. That
+time span is t = 0,.02,…,1 for the discrete spectrum and pendulum datasets. Since                 deﬁnes a function mapping yj to λ. For example, for the ﬂuid ﬂow problem off the
+the dynamics on the slow manifold for the ﬂuid ﬂow example are slower and more                    attractor, we have three eigenfunctions. The auxiliary network learns a map from
+
+complicated, we increase the time span for that dataset to t = 0,.05,…,6. However,                y12 þ y22 to μ and ω and  another map  from y3 to λ. This could be implemented                    as
+                                                                                                  one network deﬁning a     mapping Λ :  R2 ! R3 where the layers are not fully
+when we include data off the slow manifold, we want to capture the fast dynamics
+                                                                                                  connected (y12 þ y22 should not inﬂuence λ and y3 should not inﬂuence μ and ω).
+as the trajectories are attracted to the slow manifold, so we change the time span to             However, for simplicity, we implement this as two separate auxiliary networks, one
+t = 0,.01,…,1. Note that for the network to capture transient behavior as in the ﬁrst
+                                                                                                  for the complex conjugate pair of eigenvalues and one for the the real eigenvalue.
+and last example, it is important to include enough samples of transients in the
+
+training data.
+
+    The discrete spectrum dataset is created from random initial conditions x where               Explicit loss function. Our loss function has three weighted mean-squared error
+x1, x2∈[−0.5, 0.5], since this portion of phase space is sufﬁcient to capture the                 components: reconstruction accuracy Lrecon, future state prediction Lpred, and
+dynamics.                                                                                         linearity of dynamics Llin. Since we know that there are no outliers in our data, we
+                                                                                                  also use an L1 term to penalize the data point with the largest loss. Finally, we add
+   The pendulum dataset is created from random initial conditions x, where                        ‘2 regularization on the weights W to avoid overﬁtting. More speciﬁcally:
+
+x1∈[−3.1,3.1] (just under [−π,π]), x2∈[−2,2], and the potential function is under
+                                                         1  x22
+0.99.  The  potential  function  for  the  pendulum  is  2       À  cosðx1Þ.  These  ranges  are      L ¼ α1ðLrecon þ LpredÞ þ Llin þ α2L1 þ α3kWk22                                                ð11Þ
+
+chosen to sample the pendulum in the full phase space where the pendulum
+
+approaches having an inﬁnite period.                                                                                        Lrecon ¼ x1 À φÀ1ðφðx1ÞÞMSE
+
+   The ﬂuid ﬂow problem limited to the slow manifold is created from random                                                                                                                         ð12Þ
+
+initial conditions x on the bowl where r∈[0, 1.1], θ∈[0, 2π], x1 = rcos(θ), x2 = rsin                                          1   X Sp xmþ1     φÀ1 ðK m φðx1 ÞÞMSE
+(θ), and x3 ¼ x12 þ x22. This captures all of the dynamics on the slow manifold,                                               Sp
+which consists of trajectories that spiral toward the limit cycle at r = 1.                                                        m¼1
+
+   The ﬂuid ﬂow problem beyond the slow manifold is created from random initial                             Lpred           ¼                   À                                                   ð13Þ
+
+conditions x where x1∈[−1.1,1.1], x2∈[−1.1,1.1], and x3∈[0,2.42]. These limits are
+
+chosen to include the dynamics on the slow manifold covered by the previous
+
+dataset, as well as trajectories that begin off the slow manifold. Any trajectory that                                            1     X T À1 φðxmþ1 Þ                          K m φðx1 ÞMSE
+                                                                                                                                  À
+grows to x3 > 2.5 is eliminated so that the domain is reasonably compact and well-                          Llin            ¼  T     1  m¼1                                     À                   ð14Þ
+sampled.
+
+Code. We use the Python API for the TensorFlow framework54 and the Adam                               L1 ¼ x1 À φÀ1ðφðx1ÞÞ1þx2 À φÀ1ðKφðx1ÞÞ1;                                              ð15Þ
+optimizer56 for training. All of our code is available online at github.com/Betha-
+                                                                                                  where MSE refers to mean squared error and T is the number of time steps in each
+nyL/DeepKoopman.                                                                                  trajectory. The weights α1, α2, and α3 are hyperparameters. The integer Sp is a
+                                                                                                  hyperparameter for how many steps to check in the prediction loss. The hyper-
+Network architecture. Each hidden layer has the form of Wx + b followed by an                     parameters α1, α2, α3, and Sp are listed in Table 4.
+activation with the rectiﬁed linear unit (ReLU): f(x) = max{0,x}. In our
+                                                                                                      The matrix K is parametrized by the function λ = Λ(y), which is learned by an
+Table 2 Dataset sizes                                                                             auxiliary network. The eigenvalues can vary along a trajectory, so in Lpred and Llin,
+                                                                                                  Km = K(λ1) ⋅ K(λ2)…K(λm). However, on Hamiltonian systems, such as the
+Length of traj.        Discrete            Pendulum                 Fluid            Fluid        pendulum, the eigenvalues are constant along each trajectory. If a system is known
+# Training traj.       spectrum                                     ﬂow 1            ﬂow 2
+Batch size                                 51                                                     to be Hamiltonian, the network training could be sped up by encoding the
+                       51                  15,000                   121              101          constraint that Km = K(λ)m. In order to demonstrate that this specialized
+                       5000                128                      15,000           20,000
+                       256                                          256              128          knowledge is not necessary, we use the more general case for all of our datasets,
+
+                                                                                                  including the pendulum.
+
+                                                                                                  tTrribauintiionng.inWteheinriatinaglieze[−easc, hs]wfoerigsh¼t m1a=tpriﬃaxﬃ,  W randomly from a uniform dis-
+                                                                                                                                                                                where a is the dimension of the input
+
+                                                                                                  of the layer. This distribution was suggested in ref. 21. Each bias vector b is initi-
+
+                                                                                                  alized to 0. The model for the discrete spectrum example is trained for 2 h on an
+
+                                                                                                  NVIDIA K80 GPU. The other models are each trained for 6 h. The learning rate for
+
+Table 3 Network architecture                                                                      the Adam optimizer is 0.001. On the pendulum and ﬂuid ﬂow datasets, for 5 min,
+
+                                                                                                  we pretrain the network to be a simple autoencoder, using the autoencoder loss but
+
+                                 Discrete  Pendulum                 Fluid            Fluid        not the linearity or prediction losses, as this speeds up the training. We also use
+                                 spectrum                           ﬂow 1            ﬂow 2
+                                           2                                                      early stopping; for each model, at the end of training, we resume the step with the
+                                 2         80                       1                1
+                                 30        1                        105              130          lowest validation error.
+                                 3         170                      1                2
+# hidden layers (HL)             10                                 300              20           Hyperparameter tuning. There are many design choices in deep learning, so we
+Width HL                                                                                          use hyperparameter tuning, as described in ref. 21. For each dynamical system, we
+# HL aux. net.
+Width HL aux. net.                                                                                train multiple models in a random search of hyperparameter space and choose the
+
+                                                                                                  one with the lowest validation error. Each model is also initialized with different
+
+8                                NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications
+NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0                                                       ARTICLE
+
+random weights. We ﬁnd that α1, which deﬁnes a trade-off between the two               25. Brunton, S. L., Proctor, J. L. & Kutz, J. N. Discovering governing equations
+objectives that include the decoder and the one that does not, has a signiﬁcant             from data by sparse identiﬁcation of nonlinear dynamical systems. Proc. Natl
+effect on the training speed.                                                               Acad. Sci. USA 113, 3932–3937 (2016).
+
+Code availability. All code used in this study is available at github.com/BethanyL/    26. Gonzalez-Garcia, R., Rico-Martinez, R. & Kevrekidis, I. Identiﬁcation of
+DeepKoopman.                                                                                distributed parameter systems: a neural net based approach. Comp. Chem.
+                                                                                            Eng. 22, S965–S968 (1998).
+Data availability
+                                                                                       27. Milano, M. & Koumoutsakos, P. Neural network modeling for near wall
+All data generated during this study can be reconstructed using the code available          turbulent ﬂow. J. Comput. Phys. 182, 1–26 (2002).
+at github.com/BethanyL/DeepKoopman.
+                                                                                       28. Wehmeyer, C. & Noé, F. Time-lagged autoencoders: deep learning of slow
+Received: 24 May 2018 Accepted: 10 October 2018                                             collective variables for molecular kinetics. J. Chem. Phys. 148, 241703 (2018).
+
+References                                                                             29. Mardt, A., Pasquali, L., Wu, H. & Noé, F. VAMPnets: deep learning of
+                                                                                            molecular kinetics. Nat. Commun. 9, Article Number 5 (2018).
+1. Guckenheimer, J. & Holmes, P. Nonlinear Oscillations, Dynamical Systems,
+     and Bifurcations of Vector Fields, Vol. 42. Applied Mathematical Sciences         30. Takeishi, N., Kawahara, Y. & Yairi, T. Learning koopman invariant subspaces
+     (Springer-Verlag New York 1983).                                                       for dynamic mode decomposition. In Advances in Neural Information
+                                                                                            Processing Systems, (eds I. Guyon and U. V. Luxburg and S. Bengio and H.
+2. Cross, M. C. & Hohenberg, P. C. Pattern formation outside of equilibrium.                Wallach and R. Fergus and S. Vishwanathan and R. Garnett) 1130–1140
+     Rev. Mod. Phys. 65, 851–1112 (1993).                                                   (Curran Associates, Inc. 2017). https://papers.nips.cc/paper/6713-learning-
+                                                                                            koopman-invariant-subspaces-for-dynamic-mode-decomposition
+3. Dullerud, G. E. & Paganini, F. A Course in Robust Control Theory: A Cconvex
+     Approach. Texts in Applied Mathematics. (Springer-Verlag: New York, 2000).        31. Yeung, E., Kundu, S. & Hodas, N. Learning deep neural network
+                                                                                            representations for Koopman operators of nonlinear dynamical systems.
+4. Koopman, B. O. Hamiltonian systems and transformation in Hilbert space.                  Preprint at http://arxiv.org/abs/1708.06850 (2017).
+     Proc. Natl Acad. Sci. USA 17, 315–318 (1931).
+                                                                                       32. Otto, S. E. & Rowley, C. W. Linearly-recurrent autoencoder networks for
+5. Koopman, B. & Neumann, Jv Dynamical systems of continuous spectra. Proc.                 learning dynamics. Preprint at http://arxiv.org/abs/1712.01378 (2017).
+     Natl Acad. Sci. USA 18, 255–263 (1932).
+                                                                                       33. Li, Q., Dietrich, F., Bollt, E. M. & Kevrekidis, I. G. Extended dynamic mode
+6. Mezić, I. & Banaszuk, A. Comparison of systems with complex behavior. Phys.              decomposition with dictionary learning: a data-driven adaptive spectral
+     D 197, 101–133 (2004).                                                                 decomposition of the koopman operator. Chaos 27, 103111 (2017).
+
+7. Mezić, I. Spectral properties of dynamical systems, model reduction and             34. Noé, F. & Nuske, F. A variational approach to modeling slow processes in
+     decompositions. Nonlinear Dyn. 41, 309–325 (2005).                                     stochastic dynamical systems. Multiscale Model. Simul. 11, 635–655 (2013).
+
+8. Budišić, M., Mohr, R. & Mezić, I. Applied Koopmanism a). Chaos 22, 047510           35. Nüske, F., Keller, B. G., Pérez-Hernández, G., Mey, A. S. & Noé, F. Variational
+     (2012).                                                                                approach to molecular kinetics. J. Chem. Theory Comput. 10, 1739–1752
+                                                                                            (2014).
+9. Mezic, I. Analysis of ﬂuid ﬂows via spectral properties of the Koopman
+     operator. Annu. Rev. Fluid. Mech. 45, 357–378 (2013).                             36. Nüske, F., Schneider, R., Vitalini, F. & Noé, F. Variational tensor approach for
+                                                                                            approximating the rare-event kinetics of macromolecular systems. J. Chem.
+10. Mezić, I. Spectral Operator Methods in Dynamical Systems: Theory and                    Phys. 144, 054105 (2016).
+     Applications (Springer, New York, NY 2017).
+                                                                                       37. Williams, M. O., Kevrekidis, I. G. & Rowley, C. W. A data-driven
+11. Schmid, P. J. Dynamic mode decomposition of numerical and experimental                  approximation of the Koopman operator: extending dynamic mode
+     data. J. Fluid Mech. 656, 5–28 (2010).                                                 decomposition. J. Nonlin. Sci. 6, 1307–1346 (2015).
+
+12. Rowley, C. W., Mezić, I., Bagheri, S., Schlatter, P. & Henningson, D. Spectral     38. Klus, S. et al. Data-driven model reduction and transfer operator
+     analysis of nonlinear ﬂows. J. Fluid Mech. 645, 115–127 (2009).                        approximation. J. Nonlin. Sci. 28, 985–1010 (2018).
+
+13. Kutz, J. N., Brunton, S. L., Brunton, B. W. & Proctor, J. L. Dynamic Mode          39. Korda, M. & Mezić, I. Linear predictors for nonlinear dynamical systems:
+     Decomposition: Data-Driven Modeling of Complex Systems (Society for                    Koopman operator meets model predictive control. Automatica 93, 149–160
+     Industrial and Applied Mathematics, Philadelphia, PA 2016).                            (2018).
+
+14. Hubel, D. H. & Wiesel, T. N. Receptive ﬁelds, binocular interaction and            40. Brunton, S. L., Brunton, B. W., Proctor, J. L. & Kutz, J. N. Koopman invariant
+     functional architecture in the cat's visual cortex. J. Physiol. 160, 106–154           subspaces and ﬁnite linear representations of nonlinear dynamical systems for
+     (1962).                                                                                control. PLoS One 11, e0150171 (2016).
+
+15. Fukushima, F. A self-organizing neural network model for a mechanism of            41. Williams, M. O., Rowley, C. W. & Kevrekidis, I. G. A kernel approach to data-
+     pattern recognition unaffected by shift in position. Biol. Cybern. 36, 193–202         driven Koopman spectral analysis. J. Comput. Dyn. 2, 247–265 (2015).
+     (1980).
+                                                                                       42. Kaiser, E., Kutz, J. N. & Brunton, S. L. Data-driven discovery of Koopman
+16. Cybenko, G. Approximation by superpositions of a sigmoidal function. Math.              eigenfunctions for control. Preprint at http://arxiv.org/abs/1707.01146 (2017).
+     Control Signals Syst. 2, 303–314 (1989).
+                                                                                       43. Bender, C. M. & Orszag, S. A. Advanced Mathematical Methods for Scientists
+17. Hornik, K., Stinchcombe, M. & White, H. Multilayer feedforward networks                 and Engineers I: Asymptotic Methods and Perturbation Theory (Springer
+     are universal approximators. Neural Netw. 2, 359–366 (1989).                           Science & Business Media, Springer-Verlag New York 1999).
+
+18. Hornik, K., Stinchcombe, M. & White, H. Universal approximation of an              44. Kevorkian, J. & Cole, J. D. Perturbation Methods in Applied Mathematics, Vol.
+     unknown mapping and its derivatives using multilayer feedforward networks.             34 of Applied Mathematical Sciences (Springer-Verlag: New York, 1981).
+     Neural Netw. 3, 551–560 (1990).
+                                                                                       45. Giannakis, D. & Majda, A. J. Nonlinear laplacian spectral analysis for time
+19. Krizhevsky, A., Sutskever, I. & Hinton, G. E. Imagenet classiﬁcation with deep          series with intermittency and low-frequency variability. Proc. Natl Acad. Sci.
+     convolutional neural networks. In Advances in Neural Information Processing            USA 109, 2222–2227 (2012).
+     Systems, (eds F. Pereira and C. J. C. Burges and L. Bottou and K. Q.
+     Weinberger) 1097–1105 (Curran Associates, Inc. 2012). https://papers.nips.cc/     46. Brunton, S. L., Brunton, B. W., Proctor, J. L., Kaiser, E. & Kutz, J. N. Chaos as
+     paper/4824-imagenet-classiﬁcation-with-deep-convolutional-neural-networks              an intermittently forced linear system. Nat. Commun. 8, 1–9 (2017).
+
+20. LeCun, Y., Bengio, Y. & Hinton, G. Deep learning. Nature 521, 436–444              47. Arbabi, H. & Mezić, I. Ergodic theory, dynamic mode decomposition and
+     (2015).                                                                                computation of spectral properties of the koopman operator. SIAM J. Appl.
+                                                                                            Dyn. Syst. 16, 2096–2126 (2017).
+21. Goodfellow, I., Bengio, Y. & Courville, A. Deep Learning (MIT Press,
+     Cambridge, MA 2016).                                                              48. Tu, J. H., Rowley, C. W., Luchtenburg, D. M., Brunton, S. L. & Kutz, J. N. On
+                                                                                            dynamic mode decomposition: theory and applications. J. Comput. Dyn. 1,
+22. Yosinski, J., Clune, J., Bengio, Y. & Lipson, H. How transferable are features in       391–421 (2014).
+     deep neural networks? In Advances in Neural Information Processing Systems,
+     (eds Z. Ghahramani and M. Welling and C. Cortes and N. D. Lawrence and K.         49. Mezic, I. Koopman operator spectrum and data analysis. Preprint at http://
+     Q. Weinberger) 3320–3328 (Curran Associates, Inc. 2014). https://papers.nips.          arxiv.org/abs/1702.07597 (2017).
+     cc/paper/5347-how-transferable-are-features-in-deep-neural-networks
+                                                                                       50. Noack, B. R., Afanasiev, K., Morzynski, M., Tadmor, G. & Thiele, F. A
+23. Bongard, J. & Lipson, H. Automated reverse engineering of nonlinear                     hierarchy of low-dimensional models for the transient and post-transient
+     dynamical systems. Proc. Natl Acad. Sci. USA 104, 9943–9948 (2007).                    cylinder wake. J. Fluid Mech. 497, 335–363 (2003).
+
+24. Schmidt, M. & Lipson, H. Distilling free-form natural laws from experimental       51. Loiseau, J.-C. & Brunton, S. L. Constrained sparse Galerkin regression. J. Fluid
+     data. Science 324, 81–85 (2009).                                                       Mech. 838, 42–67 (2018).
+
+                                                                                       52. Bagheri, S. Koopman-mode decomposition of the cylinder wake. J. Fluid
+                                                                                            Mech. 726, 596–623 (2013).
+
+                                                                                       53. Cui, H., Zhang, H., Ganger, G. R., Gibbons, P. B. & Xing, E. P. Geeps: Scalable
+                                                                                            deep learning on distributed gpus with a gpu-specialized parameter server. In
+                                                                                            Proc. 11th European Conference on Computer Systems, Vol. 4 (ACM New
+                                                                                            York, NY, USA 2016). https://dl.acm.org/citation.cfm?id=2901318
+
+NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications  9
+ARTICLE                                                                                  NATURE COMMUNICATIONS | DOI: 10.1038/s41467-018-07210-0
+
+54. Abadi, M. et al. TensorFlow: Large-scale Machine Learning on Heterogeneous           Reprints and permission information is available online at http://npg.nature.com/
+     Systems. tensorﬂow.org (2015).                                                      reprintsandpermissions/
+
+55. Mallat, S. Understanding deep convolutional networks. Philos. Trans. R. Soc. A       Publisher’s note: Springer Nature remains neutral with regard to jurisdictional claims in
+     374, 20150203 (2016).                                                               published maps and institutional afﬁliations.
+
+56. Kingma, D. & Ba, J. Adam: a method for stochastic optimization. Preprint at                              Open Access This article is licensed under a Creative Commons
+     http://arxiv.org/abs/1412.6980 (2014).                                                                  Attribution 4.0 International License, which permits use, sharing,
+                                                                                         adaptation, distribution and reproduction in any medium or format, as long as you give
+Acknowledgements                                                                         appropriate credit to the original author(s) and the source, provide a link to the Creative
+                                                                                         Commons license, and indicate if changes were made. The images or other third party
+We acknowledge generous funding from the Army Research Ofﬁce (ARO W911NF-17-             material in this article are included in the article’s Creative Commons license, unless
+1-0306) and the Defense Advanced Research Projects Agency (DARPA HR0011-16-C-            indicated otherwise in a credit line to the material. If material is not included in the
+0016). We would like to thank many people for valuable discussions about neural net-     article’s Creative Commons license and your intended use is not permitted by statutory
+works and Koopman theory: Bing Brunton, Karthik Duraisamy, Eurika Kaiser, Bernd          regulation or exceeds the permitted use, you will need to obtain permission directly from
+Noack, and Josh Proctor, and especially Jean-Christophe Loiseau, Igor Mezić, and Frank   the copyright holder. To view a copy of this license, visit http://creativecommons.org/
+Noé.                                                                                     licenses/by/4.0/.
+
+Author contributions                                                                     © The Author(s) 2018
+
+B.L. performed research; B.L., J.N.K., and S.L.B. designed research, analyzed data, and
+wrote the paper.
+
+Additional information
+
+Supplementary Information accompanies this paper at https://doi.org/10.1038/s41467-
+018-07210-0.
+
+Competing interests: The authors declare no competing interests.
+
+10       NATURE COMMUNICATIONS | (2018)9:4950 | DOI: 10.1038/s41467-018-07210-0 | www.nature.com/naturecommunications
+

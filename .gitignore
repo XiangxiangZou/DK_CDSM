@@ -1,39 +1,52 @@
-# 核心大文件目录（完全屏蔽，本地文件100%保留）
-Figs/
-Refs/
-mj_sim_log/
+# Generated experiment artifacts
+/output/
+/outputs/
+/Figs/
+/mj_sim_log/
+/simulation_logs/
+/results/
+/runs/
+/checkpoints/
+/logs/
 
-# 图片/视频类二进制文件
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.svg
-*.mp4
-*.avi
-
-# 文献/文档类
-*.pdf
-*.doc
-*.docx
-*.ppt
-*.pptx
-
-# 仿真/数据集/模型权重
-*.npz
-*.npy
-*.csv
-*.mat
-*.pth
-*.pt
-*.ckpt
-
-# Python编译产物
+# Python bytecode and tool caches
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-# 日志文件
-logs/
+# Virtual environments and local environment files
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Training and experiment service state
+wandb/
+mlruns/
+lightning_logs/
+tensorboard/
+
+# Temporary files
 *.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+~$*
+
+# Local IDE and operating-system files
+.idea/
+.vscode/
+.cursor/
+.DS_Store
+Thumbs.db
+desktop.ini

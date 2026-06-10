@@ -1,108 +1,229 @@
-# Agent Python Environment Template
+# DK_CDSM Agent Workflow
 
-> Copy this file to the root of a project as `AGENTS.md`, then replace the
-> `PYTHON_ENV_PATH` value below with the Python/Conda environment for that
-> project.
+This file defines the working rules for every agent operating in this
+repository. Read it before inspecting, modifying, testing, or running the
+project.
 
-## Required Python Environment
+These rules apply to the repository root and all subdirectories. A nested
+`AGENTS.md` may add stricter local rules, but it must not weaken this file.
 
-Change only this block when using another Python environment:
+## 1. Required Python Environment
+
+The project Python environment is:
 
 ```text
 PYTHON_ENV_PATH=D:\Apps\Anaconda3\envs\env_dk_cdsm
-PYTHON_EXE=%PYTHON_ENV_PATH%\python.exe
+PYTHON_EXE=D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe
 ```
 
-`PYTHON_ENV_PATH` is the only value that should normally be edited. The agent
-must treat `PYTHON_EXE` as the Python executable inside that environment.
+All Python scripts, modules, tests, and package operations must use
+`PYTHON_EXE`. Do not use bare `python`, `pip`, or `pytest`.
 
-All Python commands in this project must run inside this environment.
-Before running any Python command, verify that the interpreter is the one above.
-Do not use global Python, system Python, user-site Python, or an unrelated
-virtual environment.
-
-Use explicit interpreter commands:
+Before the first Python command in a task, verify the interpreter:
 
 ```powershell
-%PYTHON_EXE% -m pytest
-%PYTHON_EXE% -m pip install -r requirements.txt
-%PYTHON_EXE% script.py
+& 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -c "import sys; print(sys.executable)"
 ```
 
-Do not use bare commands unless they are already proven to resolve to this same
-environment:
+The output must resolve to the configured executable. If the environment is
+missing or broken, stop and report the problem instead of silently switching
+to another environment.
 
-```powershell
-python
-pip
-pytest
-```
+## 2. Start-of-Task Checklist
 
-## Dependency Installation Policy
+Every agent must:
 
-The agent is allowed to install Python dependencies, but only into the required
-environment above.
+1. Read this file.
+2. Run `git status --short` and preserve existing user changes.
+3. Inspect the relevant source, configuration, tests, and recent result
+   metadata before deciding how to implement a change.
+4. Prefer an existing project entry point or reusable API over adding a
+   parallel implementation.
+5. State the intended execution or edit scope before changing files.
 
-When installing packages, always use:
+Do not revert, overwrite, move, or delete unrelated files. Treat unexpected
+working-tree changes as user-owned unless proven otherwise.
 
-```powershell
-%PYTHON_EXE% -m pip install <package>
-```
+## 3. Repository Ownership
 
-Never install packages with:
-
-```powershell
-pip install <package>
-python -m pip install <package>
-```
-
-unless `python` has first been verified to be exactly:
+Use the following boundaries:
 
 ```text
-%PYTHON_EXE%
+src/            Reusable implementation code
+experiments/    CLI entry points and experiment composition
+configs/        Stable, reviewable defaults
+tests/          Automated unit and integration tests
+assets/         Required XML models and static project resources
+archive/        Historical programs retained for reproducibility
+outputs/        Generated local artifacts; never application source
 ```
 
-## requirements.txt Rule
+More specifically:
 
-After installing, upgrading, or removing any Python dependency, immediately
-update the project root `requirements.txt`.
+- `src/koopman_control/` owns reusable learning, model, evaluation, and
+  control algorithms.
+- `src/cable_robotics/` owns generic cable allocation, safety, interfaces,
+  and metrics.
+- `src/cdsm/` owns CDSM-specific MuJoCo plants, kinematics, references,
+  collection, and runtime behavior.
+- `experiments/` may select parameters and compose workflows, but reusable
+  algorithms must not be implemented there.
+- `archive/` is compatibility and historical evidence. Do not build new
+  reusable features there unless an existing archived workflow must be
+  repaired.
 
-If `requirements.txt` does not exist, create it immediately.
+## 4. Standard Execution Workflow
 
-Preferred update command:
+For code or experiment tasks, follow this order:
+
+1. Inspect the relevant entry point and implementation path.
+2. Verify the configured Python interpreter.
+3. Run the cheapest useful check, such as `py_compile`, import, `--help`, or a
+   focused unit test.
+4. Make the smallest change that follows the current architecture.
+5. Run focused tests for the changed behavior.
+6. Run broader tests when shared contracts or cross-module behavior changed.
+7. Inspect generated metrics and artifacts rather than relying only on a zero
+   exit code.
+8. Report the exact command, important parameters, metrics, and output paths.
+
+Run experiment entries as modules from the repository root:
 
 ```powershell
-%PYTHON_EXE% -m pip freeze > requirements.txt
+& 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -m experiments.deployment_pipeline.collect_data --help
 ```
 
-If the project already uses a more specific dependency workflow, such as
-`pyproject.toml`, `poetry.lock`, `uv.lock`, or `environment.yml`, update the
-appropriate project dependency file as well. Still keep `requirements.txt`
-present unless the user explicitly says not to.
+Prefer `-m experiments...` over invoking experiment files by path so imports
+remain stable.
 
-## Verification Checklist
+## 5. Experiment Reproducibility
 
-Before running tests, scripts, or package installs, the agent must check:
+Every meaningful experiment must preserve enough information to reproduce it:
 
-```powershell
-%PYTHON_EXE% -c "import sys; print(sys.executable)"
-```
+- exact entry module;
+- command-line arguments or copied configuration;
+- random seed;
+- source dataset path and filtering rules;
+- model artifact path;
+- Python environment;
+- Git branch and, when available, commit hash;
+- numerical metrics;
+- raw arrays needed to redraw figures;
+- generated figure and animation paths.
 
-The printed path must be:
+Use deterministic seeds where supported. Do not describe a run as successful
+until its metrics and saved artifacts have been checked.
+
+For model assessment:
+
+- keep one-step prediction and rollout prediction as separate evidence;
+- use rollout behavior for long-horizon model claims;
+- use closed-loop joint and Cartesian tracking metrics for control claims;
+- do not treat prediction-only DKN results as linear-LQR control evidence;
+- inspect joint limits, torque saturation, cable tensions, and non-finite
+  values before accepting collected data or control results.
+
+## 6. Output and Artifact Rules
+
+All generated research artifacts must stay under `outputs/`. They must not be
+committed or pushed to Git.
+
+Use these categories:
 
 ```text
-%PYTHON_EXE%
+outputs/data/raw/          Original collected data
+outputs/data/processed/    Filtered or transformed datasets
+outputs/data/rejected/     Invalid runs retained for diagnosis
+outputs/models/            Trained models and normalizers
+outputs/results/           Metrics, arrays, figures, and animations
+outputs/archive/           Superseded smoke tests or legacy outputs
 ```
 
-After dependency changes, the agent must check that `requirements.txt` exists
-and contains the installed package.
+For a result run, keep numerical evidence separate from display products:
 
-## Agent Operating Rules
+```text
+<run>/
+  manifest.json
+  metrics/
+  arrays/
+  figures/
+  media/
+  logs/
+```
 
-- Run tests with the required environment's Python interpreter.
-- Run scripts with the required environment's Python interpreter.
-- Install dependencies only through the required environment's Python interpreter.
-- After dependency changes, update `requirements.txt` immediately.
-- Do not modify global Python, system Python, or user-site packages.
-- If the configured environment does not exist or cannot run, stop and ask the
-  user before using any other Python environment.
+Rules:
+
+- Save raw `.npz` or equivalent arrays when figures may need to be redrawn.
+- Save metrics in JSON rather than only printing them.
+- Treat PNG, PDF, SVG, and GIF files as reproducible presentation products.
+- Do not duplicate the same figure across multiple output trees.
+- Do not place source code, required XML assets, or stable configuration in
+  `outputs/`.
+- Do not delete datasets, models, or results unless the user explicitly asks.
+- Before accepting a dataset, verify finite values, state range, saturation,
+  and cable-tension outliers.
+
+## 7. Testing and Verification
+
+Use the configured interpreter:
+
+```powershell
+& 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -m pytest
+```
+
+Minimum expectations:
+
+- Python edit: run `py_compile` or an import check.
+- CLI edit: run `--help` and a focused smoke test when practical.
+- Reusable algorithm edit: run the related unit tests.
+- Pipeline or artifact-contract edit: run an integration test or a small
+  end-to-end workflow.
+- Visualization edit: verify that generated files open and inspect at least
+  one representative image or animation frame.
+
+If a test cannot be run, state the reason and the remaining risk.
+
+## 8. Dependency Policy
+
+Dependencies may be changed only in the configured environment:
+
+```powershell
+& 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -m pip install <package>
+```
+
+After installing, upgrading, or removing a package:
+
+1. Update `configs/project/requirements.txt`.
+2. Update `configs/project/pyproject.toml` when project metadata or declared
+   dependencies are affected.
+3. Verify the package through `PYTHON_EXE`.
+4. Report the dependency change.
+
+Do not modify global Python, system Python, or user-site packages.
+
+## 9. Git Rules
+
+- `outputs/`, caches, local environments, IDE state, and logs must remain
+  ignored by the root `.gitignore`.
+- Before finishing, run `git diff --check`.
+- Review `git status --short` and distinguish task changes from pre-existing
+  changes.
+- Never use `git reset --hard`, destructive checkout, or broad cleanup
+  commands unless the user explicitly requests them.
+- Do not amend, commit, push, or open a pull request unless requested.
+- Do not commit large generated binaries merely to preserve a result; keep
+  reproducibility metadata and generation code instead.
+
+## 10. Completion Report
+
+At the end of a task, report:
+
+- files changed;
+- commands or experiment entry modules run;
+- tests and checks performed;
+- key metrics, when applicable;
+- exact output locations;
+- failures, skipped checks, or residual risks.
+
+Keep the report concise, but include enough concrete paths and values for the
+next agent to continue without reconstructing the work.

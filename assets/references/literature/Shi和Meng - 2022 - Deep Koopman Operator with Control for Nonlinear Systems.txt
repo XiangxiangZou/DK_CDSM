@@ -1,0 +1,650 @@
+                                        IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MAY, 2022           1
+
+                                        Deep Koopman Operator with Control for Nonlinear Systems
+
+                                                   Haojie Shi, Graduate Student Member, IEEE, Max Q.-H. Meng‚Ä†, Fellow, IEEE
+
+arXiv:2202.08004v2 [cs.RO] 15 Jun 2022     Abstract‚ÄîRecently Koopman operator has become a promis-                                                                             Nonlinear
+                                        ing data-driven tool to facilitate real-time control for unknown                                                                       Control
+                                        nonlinear systems. It maps nonlinear systems into equivalent
+                                        linear systems in embedding space, ready for real-time linear                           Linear Control
+                                        control methods. However, designing an appropriate Koopman
+                                        embedding function remains a challenging task. Furthermore,                     Fig. 1: Prediction Power vs. Linearity. The rank of prediction
+                                        most Koopman-based algorithms only consider nonlinear systems                   error is computed by sorting the prediction error tested in
+                                        with linear control input, resulting in lousy prediction and                    six environments in ascending order, and lower rank repre-
+                                        control performance when the system is fully nonlinear with                     sents smaller prediction error. * means our methods. KD,
+                                        the control input. In this work, we propose an end-to-end deep                  KRBF, KDNN and KRNN represents Koopman Derivative
+                                        learning framework to learn the Koopman embedding function                      [22], Koopman RBF [14], Deep neural network and Deep
+                                        and Koopman Operator together to alleviate such diÔ¨Éculties.                     recurrent network methods.
+                                        We Ô¨Årst parameterize the embedding function and Koopman
+                                        Operator with the neural network and train them end-to-end with                    For the prediction of nonlinear systems, great research
+                                        the K-steps loss function. Then, an auxiliary control network is                interest has been put into data-driven methods like SINDy
+                                        augmented to encode the nonlinear state-dependent control term                  [8]. The deep neural network also plays an important role in
+                                        to model the nonlinearity in the control input. This encoded                    nonlinear system modeling with its strong expressive power
+                                        term is considered the new control variable instead to ensure                   [15]. Both of these methods discover hidden dynamics in a
+                                        linearity of the modeled system in the embedding system. We                     nonlinear form, demanding nonlinear control methods such as
+                                        next deploy Linear Quadratic Regulator (LQR) on the linear                      iLQR [18] and NMPC [1]. Nevertheless, these optimization-
+                                        embedding space to derive the optimal control policy and decode                 based methods require tremendous computational time with
+                                        the actual control input from the control net. Experimental                     the increasing dimensions of the system state, which is pro-
+                                        results demonstrate that our approach outperforms other existing                hibitive for real-time control of high dimensional nonlinear
+                                        methods, reducing the prediction error by order of magnitude                    systems. Besides, model-based RL approaches illustrate great
+                                        and achieving superior control performance in several nonlinear                 success in controlling nonlinear systems. They Ô¨Årst train the
+                                        dynamic systems like damping pendulum, CartPole, and the seven                  neural network to approximate the dynamics and then apply
+                                        DOF robotic manipulator.                                                        policy search methods for trajectory optimization via back-
+                                                                                                                        propagation [28], [31]. Model-free RL approaches also achieve
+                                           Index Terms‚ÄîDeep Learning Methods, Model Learning for                        strong performance on continuous control of nonlinear systems
+                                        Control, Machine Learning for Robot Control.                                    [12], [27], [27]. However, these methods suÔ¨Äer from sample
+                                                                                                                        eÔ¨Éciency issues and lack of generalization.
+                                                                 I. INTRODUCTION
+                                                                                                                           Recently, the Koopman operator has shown great potential to
+                                        T HE prediction and control of nonlinear systems remain                         alleviate such diÔ¨Éculties for nonlinear control under unknown
+                                              a challenging task. Classical methods Ô¨Årst require full                   dynamics. As a data-driven approach, the Koopman operator
+                                        knowledge of the system model to predict the evolution of                       can automatically learn the system model with the least
+                                        dynamical systems and then design state feedback control laws                   square method. Furthermore, the Koopman operator can map
+                                        [24] or optimization-based control policies [1], [18]. However,                 nonlinear dynamics to linear systems in the embedding space.
+                                        the hidden dynamics of chaotic nonlinear systems are usually                    And the embedded linear system is ready to be controlled
+                                        unknown or too complicated to be modeled, prohibiting such                      via linear methods like LQR [4], [22] and MPC [9], [14].
+                                        controllers from taking eÔ¨Äect.                                                  Still, selecting the embedding function to maintain prediction
+                                                                                                                        quality remains a tough task. Recent approaches focus on
+                                           Manuscript received: February 13, 2022; Revised May 14, 2022; Accepted
+                                        May 29, 2022.
+
+                                           This paper was recommended for publication by Editor Dana Kulic upon
+                                        evaluation of the Associate Editor and Reviewers‚Äô comments. This work was
+                                        partially supported by National Key R&D program of China with Grant No.
+                                        2019YFB1312400, Hong Kong RGC CRF grant C4063-18G, Hong Kong
+                                        RGC GRF grant No. 14211420 and Hong Kong RGC TRS grant T42-409/18-
+                                        R awarded to Max Q.-H. Meng. (Corresponding author: Max Q.-H. Meng)
+
+                                           Haojie Shi is from the Chinese University of Hong Kong, Hong Kong,
+                                        h.shi@link.cuhk.edu.hk.
+
+                                           Max Q.-H. Meng is with Shenzhen Key Laboratory of Robotics Perception
+                                        and Intelligence, and the Department of Electronic and Electrical Engineering,
+                                        Southern University of Science and Technology, Shenzhen 518055, China,
+                                        on leave from the Department of Electronic Engineering, The Chinese
+                                        University of Hong Kong, Hong Kong, and also with the Shenzhen Research
+                                        Institute of The Chinese University of Hong Kong, Shenzhen 518057, China,
+                                        max.meng@ieee.org
+
+                                           Digital Object IdentiÔ¨Åer (DOI): see top of this page.
+2  IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MAY, 2022
+
+learning the embedding functions with deep neural networks             dynamics via sparse regression of the dynamics matrix. Deep
+[2], [20] and then apply linear control methods [13], [19].            neural networks (DNNs) also play an important role in directly
+However, after lifting the state to embedded space, the linear-        learning the hidden nonlinear dynamics from data [15], espe-
+quadratic form of the cost function can be distorted in the            cially the deep recurrent neural networks that take advantage of
+hidden space, increasing the subsequent control diÔ¨Éculty.              the temporal information of data [11]. And latent state space
+Moreover, previous Koopman-based approaches only model                 methods that learn state representation with deep generative
+nonlinear systems with linear control input, destroying the            models succeed in modeling and controlling nonlinear systems
+prediction quality for general nonlinear systems.                      from raw pixels. [16], [32] Koopman-based approaches Ô¨Årst
+                                                                       select the embedding function to lift the original state into
+   In this work, we propose an end-to-end deep learning                embedding space and then learn the linear operator with
+framework to learn the Koopman embedding function and                  the least square method to Ô¨Åt the linear dynamics in the
+Koopman Operator together to alleviate such diÔ¨Éculties. Our            lifted space. To choose the embedding functions, standard
+proposed embedding function concatenates the original state            methods utilize the radial basis function (RBF) networks as
+and the neural network encodings so that the original state            the representation function [14]. The selection of RBF centers
+can be preserved for further control. Hence, the cost function         signiÔ¨Åcantly inÔ¨Çuences the approximation performance, and
+in the embedding space is consistent with that in the original         it requires tremendous manual eÔ¨Äort. [34]. Derivative-based
+space. Furthermore, we propose an auxiliary control network            Koopman [22] uses higher-order derivatives of nonlinear dy-
+that both encodes the state and control to model the nonlinear         namics as lift function, which achieves promising prediction
+state-dependent term in control. Then the encoded term is              performance, but it requires the knowledge of the derivatives
+considered the new control variable for linear control. After          of unknown dynamics. In contrast, deep learning approaches
+deriving the optimal control policy, the actual control input          promote the learning of embedding functions with deep neural
+can be recovered from the encoded term. In this way, we                networks [2], [14], improving the prediction quality for a long
+maintain both the prediction power and the linear dynamics             time horizon.
+of the modeled system, suitable for linear control methods.
+                                                                          Direct Nonlinear Control: Nonlinear control methods
+   To further evaluate our results, we conduct experiments on          can be sorted as direct control approaches and linearization
+several nonlinear systems. For prediction, experimental results        approaches. As for direct control approaches, they directly
+demonstrate that our approach outperforms other Koopman-               control the nonlinear model with backstepping feedback con-
+based approaches and achieves comparable or even better                trol laws [10] or optimal control such as iLQR [18] and
+performance than the deep recurrent neural network. Conse-             NMPC [1]. Backstepping methods require the analytical form
+quently, better prediction performance ensures our approach            of dynamic equations, which is inaccessible for complex
+to achieve better control results in nonlinear dynamic environ-        nonlinear systems. Moreover, direct optimal control methods
+ments like damping pendulum, CartPole, and the seven DOF               demand tremendous computational time for high-dimensional
+robotic manipulator.                                                   systems, which is computationally prohibitive for real-time
+                                                                       control. Besides, RL-based methods train the neural network
+   In summary, the main contributions of these papers are:             to approximate the optimal policy via policy gradient or value
+                                                                       iteration [12], [17], [26]. They can compute optimal policy
+   1) We propose an end-to-end deep learning framework that            in real-time with feedforward networks but still suÔ¨Äer from
+       trains the embedding function and Koopman Operator              sample eÔ¨Éciency and generalization issues.
+       together, maintaining both the prediction quality and the
+       consistency of cost function in embedded space.                    Nonlinear Control Linearization: Local linearization
+                                                                       serves as the basic approach for nonlinear control. It Ô¨Årst
+   2) We design an auxiliary control network that models the           linearizes the nonlinear function at the current state and then
+       state-dependent nonlinearity in control input, improving        controls the system with LQR or MPC [24], but the stability
+       the prediction performance while retaining the linear           is only guaranteed in a local region where the linearization
+       dynamics of the modeled system so that it is feasible           approximates the nonlinear dynamics well. Koopman-based
+       for linear control methods.                                     approaches [13], [14], [19], [22] highly enlarge the stable
+                                                                       area by globally mapping the nonlinear dynamics to linear
+   3) We evaluate our approach in several nonlinear dynamic            dynamics in embedding space. After lifting the state space to
+       systems and achieve better prediction and control perfor-       embedding space, liner control methods like LQR and MPC
+       mance than existing Koopman-based methods and deep              are ready to be deployed for real-time control.
+       learning-based approaches.
+                                                                                                III. BACKGROUND
+                        II. RELATED WORK
+                                                                       A. Basics of Koopman Operator
+   Prediction of nonlinear systems: For unknown dynamics,
+data-driven methods have been considered a leading tool                   Given the nonlinear systems with discrete dynamics:
+for learning the hidden nonlinear dynamics model. Dynamic
+model decomposition algorithms (DMD,EDMD) [25], [30],
+[33] seeks an optimal linear operator matrix to Ô¨Åt the evolution
+of nonlinear systems with spectral decomposition. Sparse
+identiÔ¨Åcation of nonlinear dynamics algorithms [7], [8] aim
+to discover the governing equations from data of nonlinear
+
+   Source Code: https://github.com/HaojieSHI98/DeepKoopmanWithControl  Ì†µÌ±†Ì†µÌ±ò+1 = Ì†µÌ∞π (Ì†µÌ±†Ì†µÌ±ò )  (1)
+SHI et al.: DEEP KOOPMAN WITH CONTROL                                                                                                                                                   3
+
+Koopman Operator K is an inÔ¨Ånite linear operator that evolves                                                 where Ì†µÌ±ßÌ†µÌ±ò is the embedded state, Ì†µÌ±îÌ†µÌºÉ : RÌ†µÌ±õ ‚Üí RÌ†µÌ±ë is the
+the embedding functions Ì†µÌ±î of the state:                                                                      parameterized neural network. The advantage of this design
+                                                                                                              is that the original state can be easily recovered by:
+                                 KÌ†µÌ±î(Ì†µÌ±†) = Ì†µÌ±î ‚ó¶ Ì†µÌ∞π (Ì†µÌ±†)                                                  (2)
+
+Considering the control input with the assumption that Ì†µÌ±¢Ì†µÌ±ò+1 =                                                                         Ì†µÌ±•Ì†µÌ±ò = Ì†µÌ∞∂Ì†µÌ±ßÌ†µÌ±ò                                   (10)
+Ì†µÌ±¢Ì†µÌ±ò , the evolution Ô¨Çow follows as:
+                                                                                                              where the matrix Ì†µÌ∞∂ ‚àà RÌ†µÌ±õ√ó(Ì†µÌ±õ+Ì†µÌ±ë) holds the simple form as:
+
+                     Ì†µÌ±î(Ì†µÌ±•Ì†µÌ±ò+1, Ì†µÌ±¢Ì†µÌ±ò+1) = KÌ†µÌ±î(Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò )                                              (3)  Ì†µÌ∞∂ = Ì†µÌ∞ºÌ†µÌ±õ 0                                                               (11)
+
+where Ì†µÌ±• ‚àà RÌ†µÌ±õ, Ì†µÌ±¢ ‚àà RÌ†µÌ±ö, and Ì†µÌ±î : RÌ†µÌ±õ+Ì†µÌ±ö ‚Üí RÌ†µÌ±ë. Therefore, with                                              In this way, we can retain the form of the cost function for
+                                                                                                              further control.
+the embedding function Ì†µÌ±î lifting the state space to embedding
+                                                                                                                 For the second part of embedding function, we have three
+space, Koopman Operator K maps the nonlinear dynamics to                                                      versions to represent Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò ). The Ô¨Årst version is called
+                                                                                                              Deep KoopmanU with Control (DKUC) algorithm. It just
+linear dynamics. Readers can refer to [6] for more details on                                                 simpliÔ¨Åes the function as Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò ) = Ì†µÌ±¢Ì†µÌ±ò , then the evolution
+                                                                                                              equation degrades to Eq.(5).
+Koopman Operator theory.
+                                                                                                                 The sceond version is called Deep Koopman AÔ¨Éne with
+Previous methods simplify (3) by linearizing the control                                                      control (DKAC) algorithm, it considers the evolution function
+                                                                                                              as control aÔ¨Éne form, so that Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò ) = Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò )Ì†µÌ±¢, and the
+term. They Ô¨Årst seperate the embedding function into two                                                      Eq.(3) is modiÔ¨Åed as:
+
+parts that Ì†µÌ±î(Ì†µÌ±•, Ì†µÌ±¢) = [Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•, Ì†µÌ±¢); Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•, Ì†µÌ±¢)], and assume that
+Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•, Ì†µÌ±¢) = Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•), Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•, Ì†µÌ±¢) = Ì†µÌ±¢. Then the Eq.(3) is simpliÔ¨Åed
+
+as:           Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±ò+1) = Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±• Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±¢                                  Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±ò )
+
+              Ì†µÌ±¢ Ì†µÌ±ò +1                         Ì†µÌ∞æÌ†µÌ±¢Ì†µÌ±• Ì†µÌ∞æÌ†µÌ±¢Ì†µÌ±¢                       Ì†µÌ±¢ Ì†µÌ±ò                 (4)
+
+                                                                                                              Ì†µÌ±ßÌ†µÌ±ò+1 = Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±• Ì†µÌ±ßÌ†µÌ±ò + Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±¢Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò )Ì†µÌ±¢                               (12)
+
+which can further be written as:                                                                              And we parameterize the function Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò ) by designing an
+                                                                                                              auxilliary control network Ì†µÌºô, so that Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò ) = Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•Ì†µÌ±ò ).
+              Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±ò+1) = Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±• Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±ò ) + Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±¢Ì†µÌ±¢Ì†µÌ±ò                                           (5)
+                                                                                                                 For the Ô¨Ånal version, we use the control network Ì†µÌºô to
+However, such simpliÔ¨Åcation inevitably damages the prediction                                                 approximate the function Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò ) directly as Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò ) =
+performance of the nonlinear system and can further aÔ¨Äect the                                                 Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò ), and the evolution function remains the same
+control results.                                                                                              form as Eq.(8). It is called Deep Koopman Nonlinear (DKN)
+                                                                                                              algorithm.
+
+B. Learning Koopman Operator
+
+   Data-driven methods are deployed to learn the Koop-                                                        B. Feedforward Prediction
+man Operator K. Given the dataset Ì†µÌ±îÌ†µÌ±ò = Ì†µÌ±î(Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò ), Ì†µÌ±ò =
+[1, 2, ..., Ì†µÌ±Å], the Koopman Operator Ì†µÌ∞æÌ†µÌ±ë is computed by opti-                                                  Given the current state Ì†µÌ±•Ì†µÌ±° , we can easily predict future
+mizing the mean square loss:                                                                                  K-steps states by the feedforward network. Besides the em-
+                                                                                                              bedding function, we also parameterize the Koopman Oper-
+              Ì†µÌ∞æÌ†µÌ±ë = arg min Œ£Ì†µÌ†µÌ±ñ=Ì±Å 1‚àí1 ||Ì†µÌ±îÌ†µÌ±ñ+1 ‚àí Ì†µÌ∞æÌ†µÌ±ëÌ†µÌ±îÌ†µÌ±ñ ||                                           (6)  ator matrix Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±• and Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±¢ by one layer linear network that
+                                                                                                              Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±• = Ì†µÌ∞¥, Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±¢ = Ì†µÌ∞µ. Then the K-steps prediction follows:
+                                 Ì†µÌ∞æÌ†µÌ±ë
+
+The least-square problem has a closed-form solution:                                                          Ì†µÌ±ßÌ†µÌ±°+Ì†µÌ±ò+1 = Ì†µÌ∞¥Ì†µÌ±ßÌ†µÌ±°+Ì†µÌ±ò + Ì†µÌ∞µÌ†µÌ±îÌ†µÌºô (Ì†µÌ±•Ì†µÌ±°+Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±°+Ì†µÌ±ò ), Ì†µÌ±ò = 0, ..., Ì†µÌ∞æ ‚àí 1
+
+                                            ‚àó      =        ‚Ä†                                            (7)  Ì†µÌ±ßÌ†µÌ±° = Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±° ) =        Ì†µÌ±•Ì†µÌ±°
+                                                                                                                                         Ì†µÌ±îÌ†µÌºÉ (Ì†µÌ±•Ì†µÌ±° )
+                                         Ì†µÌ∞æ            Ì†µÌ±ÉÌ†µÌ∞∫
+                                               Ì†µÌ±ë
+
+where  Ì†µÌ±É  =    1    Œ£Ì†µÌ†µÌ±ñ=Ì±Å 1‚àí1  Ì†µÌ±îÌ†µÌ±ñ+1  Ì†µÌ±îÌ†µÌ±á  ,   Ì†µÌ∞∫  =    1    Œ£Ì†µÌ†µÌ±ñ=Ì±Å 1‚àí1  Ì†µÌ±îÌ†µÌ±ñ  Ì†µÌ±îÌ†µÌ±á   ,  and  ‚Ä†  is  the  Ì†µÌ±•Ì†µÌ±°+Ì†µÌ±ò = Ì†µÌ∞∂ Ì†µÌ±ßÌ†µÌ±°+Ì†µÌ±ò                                                      (13)
+              Ì†µÌ±Å ‚àí1                                       Ì†µÌ±Å ‚àí1
+                                           Ì†µÌ±ñ                                        Ì†µÌ±ñ
+
+Moore‚ÄìPenrose pseudoinverse.                                                                                  where Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•, Ì†µÌ±¢) = Ì†µÌ±¢ for KPUC algorithm, Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•, Ì†µÌ±¢) = Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•)Ì†µÌ±¢
+                                                                                                              for KPAC algorithm, and Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•, Ì†µÌ±¢) = Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•, Ì†µÌ±¢) for KPN algo-
+                        IV. METHODOLOGY                                                                       rithm.
+
+A. Framework                                                                                                  C. K-steps Loss Function
+
+   We Ô¨Årst seperate the embedding function into two parts:                                                       Standard Koopman-based algorithm Ô¨Årst selects the embed-
+Ì†µÌ±î(Ì†µÌ±•, Ì†µÌ±¢) = [Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•, Ì†µÌ±¢); Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•, Ì†µÌ±¢))]. Without loss of generality, we                                  ding function and then learns the Koopman Operator matrix
+assume that the Ô¨Årst term is only related to the system state,                                                with linear regression for only step prediction. In this work,
+so we get Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•, Ì†µÌ±¢) = Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•). Based on Eq.(3), it is derived that:                                     we learn the embedding function and Koopman Operator
+                                                                                                              end-to-end instead, and we design the K-steps prediction
+              Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±ò+1) = Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±• Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±ò ) + Ì†µÌ∞æÌ†µÌ±•Ì†µÌ±¢Ì†µÌ±îÌ†µÌ±¢ (Ì†µÌ±•Ì†µÌ±ò , Ì†µÌ±¢Ì†µÌ±ò )                            (8)  loss function for long-term prediction. Given the dataset
+                                                                                                               Ì†µÌ±ãÌ†µÌ±ñ ‚àà RÌ†µÌ±Å √óÌ†µÌ±õ, Ì†µÌ±àÌ†µÌ±ñ ‚àà RÌ†µÌ±Å √óÌ†µÌ±ö, Ì†µÌ±ñ = 0, 1, 2, ..., Ì†µÌ∞æ , we can compute
+For the Ô¨Årst part of embedding function, we use a deep                                                        the real embedded state Ì†µÌ±çÌ†µÌ±ñ = Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±ã), and predict the K-steps
+                                                                                                              sates [Ì†µÀÜÌ±çÌ†µÌ±ñ, Ì†µÌ±ñ = 1, 2, ..., Ì†µÌ∞æ] in embedding space from the initial
+neural network Ì†µÌºÉ to parameterize Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•, Ì†µÌ±ò). Instead of directly                                          state Ì†µÌ±ã0 via Eq.(13). The loss function is computed as:
+encoding the state like [20], which requires an extra decode
+
+network, we concatenate the origin state and network encoding
+
+together:
+
+                     Ì†µÌ±ßÌ†µÌ±ò = Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±ò ) =                  Ì†µÌ±• Ì†µÌ±ò                                        (9)  Ì†µÌ∞ø (Ì†µÌºÉ, Ì†µÌºô) = Œ£Ì†µÌ†µÌ±ñ=Ì∞æ 1Ì†µÌªæÌ†µÌ±ñ‚àí1 Ì†µÌ±Ä Ì†µÌ±ÜÌ†µÌ∞∏ (Ì†µÌ±çÌ†µÌ±ñ, Ì†µÀÜÌ±çÌ†µÌ±ñ)                        (14)
+                                                          Ì†µÌ±îÌ†µÌºÉ (Ì†µÌ±•Ì†µÌ±ò )
+4                                                                                   IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MAY, 2022
+
+                                                                     Ì†µÌ±•Ì†µÌ±°                    Ì†µÌ±ßÌ†µÌ±°+1 = Ì†µÌ∞¥Ì†µÌ±ßÌ†µÌ±° + Ì†µÌ∞µÌ†µ‡∑úÌ±¢Ì†µÌ±°
+
+                                                                                                                                                                     K step evolution
+
+                                                                                                                                       +                                    +‚Ä¶+
+
+         Current State Ì†µÌ±•Ì†µÌ±°                            Embedding net                 Ì†µÌ±ßÌ†µÌ±°    Koopman A net
+
+                                                                                                                                                         Ì†µÌ±ßÌ†µÌ±°+1                                                   Ì†µÌ±ßÌ†µÌ±°+Ì†µÌ∞æ
+
+         CÌ†µÌ±úÌ†µÌ±õÌ†µÌ±°Ì†µÌ±üÌ†µÌ±úÌ†µÌ±ô Ì†µÌ∞ºÌ†µÌ±õÌ†µÌ±ùÌ†µÌ±¢Ì†µÌ±° Ì†µÌ±¢Ì†µÌ±°                                                                                                                               ‚Ä¶ Ì†µÌ±¢Ì†µÌ±°+1                 Ì†µÌ±¢Ì†µÌ±°+Ì†µÌ∞æ‚àí1
+
+                                                       Control net                               Koopman B net                                                                 Ì†µÌ±• = Ì†µÌ∞∂Ì†µÌ±ß
+                                                                                     Ì†µ‡∑úÌ±¢Ì†µÌ±°
+
+                                             Details of Control net
+
+                                                                                                                                                                                           ‚Ä¶
+
+                    Ì†µ‡∑úÌ±¢Ì†µÌ±° = Ì†µÌ±¢Ì†µÌ±°                          √ó                         Ì†µ‡∑úÌ±¢Ì†µÌ±° = Ì†µÌ±îÌ†µÌºô(Ì†µÌ±•Ì†µÌ±°, Ì†µÌ±¢Ì†µÌ±°)                                             Ì†µÌ±•Ì†µÌ±°+1                                             Ì†µÌ±•Ì†µÌ±°+Ì†µÌ∞æ
+                  a) Ì†µÌ∞∑Ì†µÌ∞æÌ†µÌ±àÌ†µÌ∞∂                Ì†µ‡∑úÌ±¢Ì†µÌ±° = Ì†µÌ±îÌ†µÌºô(Ì†µÌ±•Ì†µÌ±°) ‚ãÖ Ì†µÌ±¢Ì†µÌ±°                c) Ì†µÌ∞∑Ì†µÌ∞æÌ†µÌ±Å
+
+                                               b) Ì†µÌ∞∑Ì†µÌ∞æÌ†µÌ∞¥Ì†µÌ∞∂
+
+                                        Fig. 2: The overview of the neural network framework for K-steps predictions.
+
+where Ì†µÌªæ is the weight decay hyper-parameter, and Ì†µÌ±ÄÌ†µÌ±ÜÌ†µÌ∞∏ is                                  takes the form that:
+the mean square loss function. Instead of only considering the
+following one-step prediction error, the K-steps loss focuses                                                 min              Œ£‚àûÌ†µÌ±°=1 (Ì†µÌ±•Ì†µÌ±°    ‚àí     Ì†µÌ±• Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±† )Ì†µÌ±á  Ì†µÌ±Ñ (Ì†µÌ±•Ì†µÌ±°  ‚àí           Ì†µÌ±• Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±† )  +    Ì†µÌ±á  Ì†µÌ±ÖÌ†µÌ±¢Ì†µÌ±°
+on the weighted sum of K-steps prediction error, conducive to
+prediction in a long time horizon.                                                                                                                    Ì†µÌ±°                                    Ì†µÌ±°              Ì†µÌ±¢
+
+                                            Ì†µÌ±•Ì†µÌ±°                                                                                                                                                              Ì†µÌ±°
+
+                                                                                                              Ì†µÌ±¢Ì†µÌ±° =1, ..., ‚àû
+
+                                                                                                                                       s.t. Ì†µÌ±•Ì†µÌ±° = Ì†µÌ∞π (Ì†µÌ±•Ì†µÌ±°‚àí1, Ì†µÌ±¢Ì†µÌ±°‚àí1)                                                         (15)
+
+                                           Ì†µÌ±îÌ†µ‚àíÌºô1(Ì†µÌ±•Ì†µÌ±°, Ì†µ‡∑úÌ±¢Ì†µÌ±°) Ì†µÌ±¢Ì†µÌ±°                          where Ì†µÌ±Ñ, Ì†µÌ±Ö is the cost matrix related to state and control input.
+                                     Ì†µ‡∑úÌ±¢Ì†µÌ±°                                                   Since the evolution function is nonlinear, the optimal control
+                                                                                             problem is tough to be solved directly.
+         Ì†µÌ∞æÌ†µÌ∞øÌ†µÌ±ÑÌ†µÌ±Ö
+                                                                                                On the contrary, the Koopman Operator maps the nonlinear
+   Ì†µÌ±ßÌ†µÌ±°                  Ì†µÌ±ÖÌ†µÌ±íÌ†µÌ±êÌ†µÌ±úÌ†µÌ±£Ì†µÌ±íÌ†µÌ±ü Ì†µÌ±ÄÌ†µÌ±úÌ†µÌ±ëÌ†µÌ±íÌ†µÌ±ô                         Ì†µÌ∞∏Ì†µÌ±õÌ†µÌ±£            systems to linear dynamics in embedding space, ensuring
+                                                                               Ì†µÌ±•Ì†µÌ±°          the feasibility of linear control methods. Therefore, we apply
+                                                                                             optimal control in embedding space and consider Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•, Ì†µÌ±¢) as
+                                                                                             the new control variable instead, in which case it degrades to
+                                                                                             the LQR control problem. Based on Eq.(13),(10), the LQR
+                                                                                             problem can be rewritten as:
+
+                                                                                                               min             Œ£‚àûÌ†µÌ±°=1 (Ì†µÌ±ßÌ†µÌ±°          ‚àí    Ì†µÌ±ëÌ†µÌ±íÌ†µÌ±†  )Ì†µÌ±á  Ì†µÀÜÌ±Ñ (Ì†µÌ±ßÌ†µÌ±°       ‚àí   Ì†µÌ±ß Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±† )  +  Ì†µÀÜÌ±¢Ì†µÌ†µÌ±°Ì±á  Ì†µÀÜÌ±ÖÌ†µÀÜÌ±¢Ì†µÌ±°
+
+                                                                                                              Ì†µÀÜÌ±¢Ì†µÌ±°=1,...,‚àû                              Ì†µÌ±ß                                 Ì†µÌ±°
+                                                                                                                                                         Ì†µÌ±°
+
+          Ì†µÌ±¢Ì†µÌ±° = Ì†µ‡∑úÌ±¢Ì†µÌ±°                               √∑                                                        s.t. Ì†µÌ±ßÌ†µÌ±°+1 = Ì†µÌ∞¥Ì†µÌ±ßÌ†µÌ±° + Ì†µÌ∞µÌ†µÀÜÌ±¢Ì†µÌ±° , Ì†µÌ±ß0 = Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•0)                                                                (16)
+         a) Ì†µÌ∞∑Ì†µÌ∞æÌ†µÌ±àÌ†µÌ∞∂
+                                        Ì†µÌ±¢Ì†µÌ±° = Ì†µ‡∑úÌ±¢Ì†µÌ±°/Ì†µÌ±îÌ†µÌºô(Ì†µÌ±•Ì†µÌ±°)                                                                    Ì†µÀÜÌ±¢Ì†µÌ±° = Ì†µÌ±îÌ†µÌºô (Ì†µÌ∞∂Ì†µÌ±ßÌ†µÌ±° , Ì†µÌ±¢Ì†µÌ±° )
+                                          Ì†µÌ±è) Ì†µÌ∞∑Ì†µÌ∞æÌ†µÌ∞¥Ì†µÌ∞∂
+
+                         Ì†µÌ±îÌ†µÌºÉ (Ì†µÌ±•Ì†µÌ±° )                                      Embedding net     where            Ì†µÌ±ßÌ†µÌ±ëÌ†µÌ±íÌ†µÌ±†  =      Ì†µÌ±î      ( Ì†µÌ±• Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±†  ),  Ì†µÀÜÌ±Ñ  =        Ì†µÌ∞∂Ì†µÌ±á Ì†µÌ±ÑÌ†µÌ∞∂,             Ì†µÀÜÌ±Ö        =  Ì†µÌ±Ö       for       KPUC
+
+                                                                                                               Ì†µÌ±°                  Ì†µÌºÉ     Ì†µÌ±°
+
+Fig. 3: The Framework of LQR Control with Deep Koopman                                       algorithm, and Ì†µÀÜÌ±ÖÌ†µÌ±° = Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•Ì†µÌ±° )‚àíÌ†µÌ±á Ì†µÌ±ÖÌ†µÌ±îÌ†µÌºô (Ì†µÌ±•Ì†µÌ±° )‚àí1 for KPAC algorithm.
+Operator.
+                                                                                             Since Ì†µÌ±Ö is the pre-deÔ¨Åned matrix and can be modiÔ¨Åed for
+                                                                                             diÔ¨Äerent algorithms, we just assume Ì†µÀÜÌ±Ö = Ì†µÌ±Ö for simpliÔ¨Åcation.
+
+                                                                                             Eq.(16) has the closed-form solution via the LQR algorithm.
+
+D. LQR Control                                                                               After computing the LQR gain matrix Ì†µÌ∞æÌ†µÌ∞øÌ†µÌ±ÑÌ†µÌ±Ö, the optimal
+                                                                                             control takes the form of:
+
+   Without loss of generality, we consider quadratic loss func-                                                                        Ì†µÀÜÌ±¢‚àóÌ†µÌ±°  =     Ì†µÌ∞æÌ†µÌ∞øÌ†µÌ±ÑÌ†µÌ±Ö (Ì†µÌ±ßÌ†µÌ±°         ‚àí   Ì†µÌ±ëÌ†µÌ±íÌ†µÌ±†     )                                   (17)
+
+                                                                                                                                                                               Ì†µÌ±ß
+                                                                                                                                                                                       Ì†µÌ±°
+
+tion and optimal control with inÔ¨Ånite horizons and ignore                                    And we can recover the actual optimal control by:
+
+constraints in this work. For general nonlinear systems, given
+
+the      desired  state  Ì†µÌ±• Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±†  ,  the  standard  optimal             control  problem                                                      ‚àó       =   Ì†µÌ±î‚àí1    (Ì†µÌ±•Ì†µÌ±°  ,  Ì†µÀÜÌ±¢‚àóÌ†µÌ±°  )                                       (18)
+
+                          Ì†µÌ±°                                                                                                                   Ì†µÌ±¢              Ì†µÌºô
+
+                                                                                                                                                 Ì†µÌ±°
+SHI et al.: DEEP KOOPMAN WITH CONTROL                                                                                  5
+
+where     Ì†µÌ±¢‚àó   =       Ì†µÀÜÌ±¢‚àóÌ†µÌ±°  for  KPUC    algorithm,                    and   Ì†µÌ±¢‚àó      =      Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•Ì†µÌ±° )‚àí1Ì†µÀÜÌ±¢‚àóÌ†µÌ±°  B. K-steps Prediction
+
+            Ì†µÌ±°                                                                     Ì†µÌ±°                                     We evaluate the prediction performance of our approaches
+                                                                                                                       on the above six environments and compare them with previ-
+for KPAC algorithm. The detailed algorithm is illustrated in                                                           ous methods: Derivative-based Koopman (KDerivative) [22],
+                                                                                                                       RBF-based Koopman (KRBF) [14], Deep neural networks
+Algorithm 1.                                                                                                           (KDNN) and Deep recurrent networks (KRNN). For KDeriva-
+                                                                                                                       tive and KRBF, we train them with linear regression as
+Algorithm 1 Deep Koopman with Control                                                                                  mentioned in Eq.(6). For KDNN and KRNN, we generally
+                                                                                                                       train a neural network to approximate the nonlinear evolution
+Require: Ì†µÌ±îÌ†µÌºÉ , embedding network                                                                                      function Ì†µÌ∞π (Ì†µÌ±•, Ì†µÌ±¢) with K-steps Loss in Eq.(14). For DKAC and
+                                                                                                                       DKN, we choose the output dimension of their control net the
+    Ì†µÌ±îÌ†µÌºô, auxlliary control network                                                                                    same as the dimension of its original control input. We use
+                                                                                                                       three hidden layers and 128 hidden units, the same learning
+    Ì†µÌ∞¥, Ì†µÌ∞µ, Ì†µÌ∞∂, Koopman Operator matrix and recover matrix                                                             rate, and 15-steps prediction loss for all deep learning-based
+                                                                                                                       approaches.
+    Ì†µÌ±Ñ, Ì†µÌ±Ö, cost matrix
+                                                                                                                          The Ô¨Ånal 30-steps prediction results is plotted in Fig. 4.
+    Ì†µÌ±•0,  Ì†µÌ±• Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±† ,  initial      state  and  desired             trajectory                                        We run four times for every environment and algorithm and
+                                                                                                                       plot the mean of log10 of the maximum error in 30-time
+           Ì†µÌ±°                                                                                                          horizons. And the errors at the 15th step are shown in Table
+                                                                                                                       I. KDerivative requires the Ì†µÌ±Åth derivative of the dynamics,
+    Ì†µÌ±á, control steps                                                                                                  which is too complex or inaccessible for DoublePendulum
+                                                                                                                       and Franka, so we fail to conduct these two experiments for
+    Ì†µÌ∞π, nonlinear evolution equation                                                                                   KDerivative. From the above Ô¨Ågure and tables, we can Ô¨Ånd
+                                                                                                                       that: (1). KDerivative and KRBF work better at the Ô¨Årst several
+1: initialize LQR gain matrix: Ì†µÌ∞æÌ†µÌ∞øÌ†µÌ±ÑÌ†µÌ±Ö ‚Üê Ì†µÌ∞øÌ†µÌ±ÑÌ†µÌ±Ö( Ì†µÌ∞¥, Ì†µÌ∞µ, Ì†µÌ±Ñ, Ì†µÌ±Ö)                                                      steps since the least square methods only optimize the Ô¨Årst step
+                                                                                                                       prediction. On the contrary, deep learning-based approaches
+2:  embed the desired state                      Ì†µÌ±ßÌ†µÌ±ëÌ†µÌ±íÌ†µÌ±†  ‚Üê     Ì†µÌ±îÌ†µÌ±•  (   Ì†µÌ±• Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±†  )                               achieve better performance over a long time horizon. (2). The
+                                                                                                                       DKN algorithm performs best and even better than KRNN
+                                                  Ì†µÌ±°                        Ì†µÌ±°                                         in most cases, although KRNN takes advantage of the extra
+                                                                                                                       temporal information of data. (3). Our algorithms DKUC
+3: reset the Ì†µÌ±íÌ†µÌ±õÌ†µÌ±£ with initial state Ì†µÌ±•0                                                                             and DKAC reduce the prediction error by magnitudes than
+                                                                                                                       previous Koopman-based approaches (KDerivative & KRBF)
+4: for each t in {0...T-1} do                                                                                          and achieve comparable or even better results than fully
+                                                                                                                       deep learning-based approaches (KDNN & KRNN). (4). Our
+5: embed current state Ì†µÌ±ßÌ†µÌ±° ‚Üê Ì†µÌ±îÌ†µÌ±• (Ì†µÌ±•Ì†µÌ±° )                                                                             algorithm DKAC outperforms DKUC in prediction, especially
+                                                                                                                       on DampingPendulum, where the 15th step prediction error of
+6:     compute                  optimal     control  Ì†µÀÜÌ±¢‚àóÌ†µÌ±°  ‚Üê       Ì†µÌ∞æÌ†µÌ∞øÌ†µÌ±ÑÌ†µÌ±Ö (Ì†µÌ±ßÌ†µÌ±°       ‚àí      Ì†µÌ±ß Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±† )          DKAC is almost one-third of that of DKUC. It illustrates that
+                                                                                                                       our auxiliary control net works for better prediction.
+                                                                                                  Ì†µÌ±°
+                                                                                                                       C. Sample EÔ¨Éciency of Learning Algorithms
+7:     recover          actual       optimal     control             Ì†µÌ±¢‚àó   ‚Üê    Ì†µÌ±î‚àí1      (Ì†µÌ±•Ì†µÌ±°  ,  Ì†µÀÜÌ±¢‚àóÌ†µÌ±° )
+                                                                                                                          To evaluate the sample eÔ¨Éciency of our methods, we train
+                                                                       Ì†µÌ±°         Ì†µÌºô                                   them with various numbers of trajectory samples in the Damp-
+                                                                                                                       ingPendulum environment, and the results are plotted in Fig 5.
+8:     simulate                 the  system  forward         Ì†µÌ±• Ì†µÌ±° +1      ‚Üê    Ì†µÌ∞π (Ì†µÌ±•Ì†µÌ±° ,   Ì†µÌ±¢‚àó)                      The trajectory samples vary in [200,1000,5000,20000,50000],
+                                                                                                                       and each trajectory contains 15 time steps of data. From the
+                                                                                               Ì†µÌ±°                      Ô¨Ågure, we can see that the performance of DKUC and DKAC
+                                                                                                                       algorithms is not sensitive to the number of training samples
+9: end for                                                                                                             compared with KDNN and KRBF methods. Moreover, our
+                                                                                                                       proposed methods can achieve good prediction results after
+                         V. EXPERIMENTS                                                                                consuming 5000 trajectory samples (25 minutes of data).
+
+   In this section, we conduct complete experiments to answer                                                          D. LQR Control
+the following questions:
+                                                                                                                          As for control performance, we compare our approaches
+   (1). How is the prediction performance of our approaches                                                            with KRBF and KDerivative, which are suitable for liner
+compared with previous Koopman-based approaches and deep                                                               control methods like LQR, while KDNN and KRNN methods
+learning-based approaches? And how is the sample eÔ¨Éciency                                                              are fully nonlinear, and linear control methods are inapplicable
+of our proposed methods compared with others?
+
+   (2). How is the control performance of our approaches
+compared with previous Koopman-based methods with linear
+control?
+
+   (3). Is our proposed control net conducive to nonlinear
+system prediction and control? SpeciÔ¨Åcally, do our DPAC
+and DKN algorithms outperform the DKUC algorithm in
+prediction and control?
+
+A. Environments
+
+   To evaluate our approach, we conduct experiments on
+six nonlinear dynamics simulation envoriments, including (a)
+DampingPendulum, (b) Pendulum, (c) MountainCarContious,
+(d) CartPole, (e) DoublePendulum, and (f) Franka. Among
+above six envrionments, b)-d) are environments modiÔ¨Åed from
+OpenAI gym [5], and f) Franka is the same as [23].
+
+   Besides, the dynamics of (a) DampingPendulum environ-
+ment has the following form:
+
+                Ì†µÌ±ë Ì†µÌºÉ                                            Ì†µÌºÉ
+          Ì†µÌ±ëÌ†µÌ±° Ì†µÌºÉ = ‚àíÌ†µÌ±îÌ†µÌ±ôÌ†µÌ±†Ì†µÌ±ñÌ†µÌ±õÌ†µÌºÉ + 1 Ì†µÌ±èÌ†µÌºÉ + 1 Ì†µÌ±êÌ†µÌ±úÌ†µÌ±†Ì†µÌºÉÌ†µÌ±¢                                                      (19)
+
+                                                           Ì†µÌ±öÌ†µÌ±ô            Ì†µÌ±öÌ†µÌ±ô
+
+where Ì†µÌ±ö,Ì†µÌ±ô is the mass and length of the pendulum, Ì†µÌ±è is the
+
+damping ratio, and Ì†µÌ±¢ is the external force put horizontally (the
+
+control input).
+
+The dynamics of (e) holds the following partial derivative
+
+equation [21]:
+
+                                Ì†µÌ±Ä (Ì†µÌºÉ)Ì†µÌºÉ + Ì†µÌ±ê(Ì†µÌºÉ, Ì†µÌºÉ) + Ì†µÌ±î(Ì†µÌºÉ) = Ì†µÌ±¢                                           (20)
+
+where Ì†µÌ±Ä (Ì†µÌºÉ) is the mass matrix, Ì†µÌ±ê(Ì†µÌºÉ, Ì†µÌºÉ) is the velocity-product
+term, Ì†µÌ±î(Ì†µÌºÉ) is the gravity term and Ì†µÌ±¢ ‚àà R2 is the input force.
+6                                                     IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MAY, 2022
+
+   Fig. 4: Prediction Results. The log of mean prediction error in the next thirty steps tested in six environments.
+                                           TABLE I: Prediction Results at the 15th Step
+
+   KDerivative  DampingPendulum         Pendulum         MountainCar           CartPole          DoublePendulum              Franka
+      KRBF
+      KDNN      6.760e-1¬±3.284e-2  9.634e-1¬±1.936e-2  6.725e-2¬±3.524e-4  8.626e-2¬±2.031e-3                 -                     -
+      KRNN      2.700e-2¬±9.814e-4  2.624e+0¬±9.173e-2  1.233e-1¬±9.268e-3  2.854e-2¬±2.031e-3      3.879e+0¬±7.232e-2     8.639e-3¬±8.657e-5
+                2.517e-2¬±4.462e-3  9.714e-2¬±2.020e-2  3.509e-2¬±5.250e-3  2.582e-2¬±2.923e-3      2.636e-2¬±1.486e-3     2.888e-2¬±8.885e-4
+   DKUC(ours)   2.032e-2¬±4.695e-3  2.990e-1¬±8.550e-2  6.027e-4¬±2.128e-5  5.314e-2¬±7.360e-3      6.392e-2¬±9.584e-3     2.726e-3¬±1.187e-4
+   DKAC(ours)   2.835e-2¬±5.166e-3  5.982e-1¬±3.138e-2  9.714e-4¬±7.404e-5  1.595e-2¬±1.042e-3      1.510e-1¬±1.005e-2     2.586e-3¬±3.630e-4
+    DKN(ours)   9.511e-3¬±6.465e-4  5.153e-1¬±1.809e-2  9.663e-4¬±4.724e-5  1.075e-2¬±7.291e-4      1.304e-1¬±2.537e-2     2.485e-3¬±6.110e-4
+                2.575e-3¬±8.424e-4  5.026e-2¬±2.677e-3  1.341e-3¬±4.530e-4  8.423e-3¬±8.117e-4      7.247e-3¬±4.099e-3     2.995e-3¬±1.705e-4
+
+                                                                         TABLE II: The Total Costs of Classical Control
+
+                                                                  DampingPendulum  KDerivative   KRBF        DKUC      DKAC         iLQR
+                                                                       Pendulum     1196.692    1265.189    1183.103  1053.759    1072.974
+                                                                                     307.728                305.387   309.232      301.101
+                                                                     MountainCar      15.933      NaN        13.873    16.372       11.389
+                                                                        CartPole      90.827      NaN       100.781    89.878     5265.195
+                                                                                         -        NaN       2919.976  2905.536    11774.169
+                                                                   DoublePendulum                 NaN
+
+                                                                         TABLE III: The Tracking Error in Franka Control
+
+                                                                    LS      Franka-Eight      Franka-Star   Franka-Eight(noised)  Franka-Eight(noised)
+                                                                   SOC
+                                                                   WLS      2.968¬±90.051     3.395¬±90.289        7.505¬±0.339          93.217¬±0.771
+                                                                    CG      2.588¬±90.060     2.918¬±90.124        4.611¬±0.192          73.006¬±5.109
+                                                                  KRBF   233.834¬±914.601   262.825¬±916.344     237.889¬±16.652        461.962¬±44.285
+                                                                  DKUC      2.179¬±90.661     2.496¬±90.118        3.137¬±0.088          71.110¬±5.655
+                                                                         359.744¬±9276.283    8165¬±922782      352.152¬±156.918
+                                                                            1.450¬±90.074     1.775¬±90.161        2.035¬±0.052            3483¬±7038
+                                                                                                                                       2.312¬±0.151
+
+Fig. 5: The mean and std of Log10 Error at the 15th step in       control cost is out-of-range.
+the DampingPendulum environment with diÔ¨Äerent numbers of             From the above plot and table, it can be seen that our
+training samples.
+                                                                  approaches, DKUC and DKAC, succeed in controlling all
+to them. Moreover, we also added the iLQR [18] algorithm as       the systems and achieving good performance. KRBF is quite
+a baseline for nonlinear control methods. Besides, since we       unstable since it is highly dependent on the selection of centers
+have not found an invertible Ì†µÌ±îÌ†µÌºô (Ì†µÌ±•, Ì†µÌ±¢) of the DKN algorithm,  of RBF functions [34]. Furthermore, we can Ô¨Ånd that DKAC
+we only deploy our proposed DKUC and DKAC algorithms              outperforms DKUC and KDerivative in environments like
+for control.                                                      DampingPendulum, where the control term is highly nonlinear
+                                                                  and related to the state. Only DKAC succeeds in controlling
+   1) Classical Control: Environments from (a) to (e) are         the damping pendulum to achieve the zero point. iLQR method
+classical control problems with force as input. The phase         achieves the best performance in low dimensional tasks like
+portrait control results are plotted in Fig. 6. Table II shows    Pendulum-v1, but it consumes more computing time and
+the total cost deÔ¨Åned in Eq. (15), where NaN means that the
+SHI et al.: DEEP KOOPMAN WITH CONTROL                                                                                                                                 7
+
+dtheta                                                                                                     Ì†µÌºÉ·à∂
+
+                                                   theta
+
+                                                                                                                                           Ì†µÌºÉ·à∂
+
+                                                                                                                                                Ì†µÌºÉ/Ì†µÌ±üÌ†µÌ±éÌ†µÌ±ë  Ì†µÌºÉ/Ì†µÌ±üÌ†µÌ±éÌ†µÌ±ë
+
+                                                                                                           Fig. 7: The total cost of all initial states in the DampingPendu-
+                                                                                                           lum environment. Each point in the plane represents the initial
+                                                                                                           state (Ì†µÌºÉ, Ì†µÌºÉ), and the color represents the corresponding value.
+
+Fig. 6: Phase portraits of classical control results in six
+environments. The blue star mark means the initial state, and
+the red star mark represents the goal state. Control results
+of the KRBF algorithm running out of range are not plotted.
+KDerivative does not apply to DoublePendulum without access
+to the high order of derivatives.
+
+fails in higher dimensional tasks such as CartPole-v1 and
+
+DoublePendulum.
+
+To further illustrate the advantage of DKAC, we conduct
+
+control experiments in the DampingPendulum environment of
+
+all the initial conditions (Ì†µÌºÉ, Ì†µÌºÉ)|Ì†µÌºÉ ‚àà [‚àí4, 4], Ì†µÌºÉ ‚àà [‚àí4, 4] , and
+
+we plot the total cost given the corresponding initial states
+
+in Fig.7. From the above plots, we can see that our DKAC
+
+algorithm succeeds in directing the system to the desired state
+
+with less cost in most initial conditions, while other methods                                             Fig. 8: Franka Control Results. The desired trajectory of the
+                                                                                                           robot end-eÔ¨Äector generated in the y-z plane is plotted as the
+fail when the initial state is far away from the desired state.                                            blue line. Trajectories of WLS and KRBF are out of range.
+                                                                                                           Top Tracking results without measuring noise. Down Tracking
+2) Franka Control: For Franka Environment, our control                                                     results with Gaussian noise of N (0, 0.01 ‚àó Ì†µÌ∞º) added to the
+                                                                                                           position of the robot end-eÔ¨Äector.
+input is the desired joint velocity at 100Hz, and the actual
+                                                                                                           the lowest tracking error and is robust in measuring noise.
+force is computed via PID at 1000Hz. Our control goal is to                                                Especially for Franka-Star (noised) task, only our algorithm
+                                                                                                           succeeds in tracking the desired trajectory.
+make the robot track the desired trajectory of the robot end-
+                                                                                                                   VI. LIMITATION AND FUTURE DIRECTION
+eÔ¨Äector  Ì†µÌ±• Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±† ,  Ì†µÌ±°  =  1,  2,  ...,  Ì†µÌ±Å  .  The  control        term           has     seven  DOF,
+                                                                                                              Although our proposed algorithms outperform other state-
+          Ì†µÌ±°                                                                                               of-the-art methods in prediction and control from the exper-
+                                                                                                           imental results, this work still has several limitations. Firstly,
+and it is hard for us to design the cost matrix Ì†µÌ±Ö for DKAC.                                               though the DKN algorithm achieves the best prediction per-
+                                                                                                           formance, it is hard to Ô¨Ånd a unique inverse mapping function
+Since the derivative is not available for KDerivative, we
+
+only compare our DKUC algorithm with KoopmanRBF and
+
+methods in previous work [23], including least square (LS),
+
+weighted least square (WLS), constraint generation (CG), and
+
+SOC. The Franka control results are plotted in Fig.8 and we
+
+compare  the           tracking       error        Œ£Ì†µÌ†µÌ±°=Ì±Å 1 ||Ì†µÌ±•Ì†µÌ±°  ‚àí  Ì†µÌ±• Ì†µÌ±ë Ì†µÌ±íÌ†µÌ±†  |  |2  in  10  random
+
+                                                                        Ì†µÌ±°
+
+initial states in Table III. Furthermore, we add Gaussian noise
+
+Ì†µÌ±ã ‚àà N (0, 0.01 ‚àó Ì†µÌ∞º) to the position of the robot end-eÔ¨Äector
+
+to evaluate the robustness of the algorithms. Based on the
+
+experimental results, we can see that our algorithm achieves
+8  IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED MAY, 2022
+
+to recover the real control signals from the output of its aux-               [11] Ramazan Gencay and Tung Liu. Nonlinear modelling and prediction
+iliary control network. To address this diÔ¨Éculty, designing an                      with feedforward and recurrent networks. Physica D: Nonlinear Phe-
+invertible network to decode the output of the auxiliary control                    nomena, 108(1-2):119‚Äì134, 1997.
+network would be the key problem. One possible way could be
+to apply the autoencoder [29] to decode the output. Training                  [12] Tuomas Haarnoja, Aurick Zhou, Pieter Abbeel, and Sergey Levine. Soft
+an invertible neural network [3] directly for the auxiliary                         actor-critic: OÔ¨Ä-policy maximum entropy deep reinforcement learning
+control network would also be a possible solution. Secondly,                        with a stochastic actor. In International conference on machine learning,
+expanding our approaches to higher dimensional nonlinear                            pages 1861‚Äì1870. PMLR, 2018.
+systems is quite promising for future study, especially for soft
+robot systems whose dynamics are too complex to be derived.                   [13] Yiqiang Han, Wenjian Hao, and Umesh Vaidya. Deep learning of
+Last but not least, our approach does not consider the input                        koopman representation for control. In 2020 59th IEEE Conference
+and state constraints. Since our embedding state contains the                       on Decision and Control (CDC), pages 1890‚Äì1895. IEEE, 2020.
+original state, the state constraints are easy to derive in the
+embedding space. However, the input constraints are distorted                 [14] Milan Korda and Igor Meziƒá. Linear predictors for nonlinear dynamical
+by the control network of DKAC and DKN algorithms in the                            systems: Koopman operator meets model predictive control. Automatica,
+embedding space. Therefore, our future study will also focus                        93:149‚Äì160, 2018.
+on dealing with the input constraints in the embedding space.
+                                                                              [15] Rajesh Kumar, Smriti Srivastava, JRP Gupta, and Amit Mohindru.
+                         VII. CONCLUSION                                            Comparative study of neural networks for dynamic nonlinear systems
+                                                                                    identiÔ¨Åcation. Soft Computing, 23(1):101‚Äì114, 2019.
+   In this work, we propose an end-to-end deep learning
+framework to learn the Koopman embedding function and                         [16] Sascha Lange and Martin Riedmiller. Deep auto-encoder neural net-
+Koopman Operator together, improving the prediction power                           works in reinforcement learning. In The 2010 international joint
+of nonlinear systems and the control performance with LQR.                          conference on neural networks (ƒ≤CNN), pages 1‚Äì8. IEEE, 2010.
+Furthermore, we design a control network to model the non-
+linear state-dependent term related to control, enhancing the                 [17] Sergey Levine and Vladlen Koltun. Guided policy search. In Interna-
+prediction performance by strengthening the expressive power                        tional conference on machine learning, pages 1‚Äì9. PMLR, 2013.
+and gaining even better prediction quality than the recurrent
+neural network. Experimental results prove that this approach                 [18] Weiwei Li and Emanuel Todorov. Iterative linear quadratic regulator
+is also conducive to the control of general systems with high                       design for nonlinear biological movement systems. In ICINCO (1), pages
+nonlinearity on control terms. We hope that our work could                          222‚Äì229. Citeseer, 2004.
+facilitate the further study of real-time control on complex
+nonlinear systems.                                                            [19] Yunzhu Li, Hao He, Jiajun Wu, Dina Katabi, and Antonio Torralba.
+                                                                                    Learning compositional koopman operators for model-based control.
+                              R                                                     arXiv preprint arXiv:1910.08264, 2019.
+
+ [1] Frank Allg√∂wer and Alex Zheng. Nonlinear model predictive control,       [20] Bethany Lusch, J Nathan Kutz, and Steven L Brunton. Deep learning
+      volume 26. Birkh√§user, 2012.                                                  for universal linear embeddings of nonlinear dynamics. Nature commu-
+                                                                                    nications, 9(1):1‚Äì10, 2018.
+ [2] Omri Azencot, N Benjamin Erichson, Vanessa Lin, and Michael Ma-
+      honey. Forecasting sequential data using consistent koopman autoen-     [21] Kevin M Lynch and Frank C Park. Modern robotics. Cambridge
+      coders. In International Conference on Machine Learning, pages 475‚Äì           University Press, 2017.
+      485. PMLR, 2020.
+                                                                              [22] Giorgos Mamakoukas, Maria L Castano, Xiaobo Tan, and Todd D
+ [3] Jens Behrmann, Will Grathwohl, Ricky TQ Chen, David Duvenaud, and              Murphey. Derivative-based koopman operators for real-time control
+      J√∂rn-Henrik Jacobsen. Invertible residual networks. In International          of robotic systems. IEEE Transactions on Robotics, 37(6):2173‚Äì2192,
+      Conference on Machine Learning, pages 573‚Äì582. PMLR, 2019.                    2021.
+
+ [4] Alberto Bemporad, Manfred Morari, Vivek Dua, and Efstratios N            [23] Giorgos Mamakoukas, Orest Xherƒ≥a, and Todd Murphey. Memory-
+      Pistikopoulos. The explicit linear quadratic regulator for constrained        eÔ¨Écient learning of stable linear dynamical systems for prediction and
+      systems. Automatica, 38(1):3‚Äì20, 2002.                                        control. Advances in Neural Information Processing Systems, 33:13527‚Äì
+                                                                                    13538, 2020.
+ [5] Greg Brockman, Vicki Cheung, Ludwig Pettersson, Jonas Schneider,
+      John Schulman, Jie Tang, and Wojciech Zaremba. Openai gym. arXiv        [24] Shankar Sastry. Nonlinear systems: analysis, stability, and control,
+      preprint arXiv:1606.01540, 2016.                                              volume 10. Springer Science & Business Media, 2013.
+
+ [6] Steven L Brunton, Marko Budi≈°iƒá, Eurika Kaiser, and J Nathan Kutz.       [25] Peter J Schmid. Dynamic mode decomposition of numerical and
+      Modern koopman theory for dynamical systems. arXiv preprint                   experimental data. Journal of Ô¨Çuid mechanics, 656:5‚Äì28, 2010.
+      arXiv:2102.12086, 2021.
+                                                                              [26] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and
+ [7] Steven L Brunton, Joshua L Proctor, and J Nathan Kutz. Discovering             Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint
+      governing equations from data by sparse identiÔ¨Åcation of nonlinear            arXiv:1707.06347, 2017.
+      dynamical systems. Proceedings of the national academy of sciences,
+      113(15):3932‚Äì3937, 2016.                                                [27] David Silver, Guy Lever, Nicolas Heess, Thomas Degris, Daan Wierstra,
+                                                                                    and Martin Riedmiller. Deterministic policy gradient algorithms. In
+ [8] Steven L Brunton, Joshua L Proctor, and J Nathan Kutz. Sparse                  International conference on machine learning, pages 387‚Äì395. PMLR,
+      identiÔ¨Åcation of nonlinear dynamics with control (sindyc). IFAC-              2014.
+      PapersOnLine, 49(18):710‚Äì715, 2016.
+                                                                              [28] Yuval Tassa, Tom Erez, and Emanuel Todorov. Synthesis and stabi-
+ [9] Eduardo F Camacho and Carlos Bordons Alba. Model predictive control.           lization of complex behaviors through online trajectory optimization.
+      Springer science & business media, 2013.                                      In 2012 IEEE/RSJ International Conference on Intelligent Robots and
+                                                                                    Systems, pages 4906‚Äì4913. IEEE, 2012.
+[10] Thor I Fossen and Aslaug Grovlen. Nonlinear output feedback control
+      of dynamically positioned ships using vectorial observer backstepping.  [29] Michael Tschannen, Olivier Bachem, and Mario Lucic. Recent ad-
+      IEEE transactions on control systems technology, 6(1):121‚Äì128, 1998.          vances in autoencoder-based representation learning. arXiv preprint
+                                                                                    arXiv:1812.05069, 2018.
+
+                                                                              [30] Jonathan H Tu. Dynamic mode decomposition: Theory and applications.
+                                                                                    PhD thesis, Princeton University, 2013.
+
+                                                                              [31] Tingwu Wang, Xuchan Bao, Ignasi Clavera, Jerrick Hoang, Yeming
+                                                                                    Wen, Eric Langlois, Shunshi Zhang, Guodong Zhang, Pieter Abbeel, and
+                                                                                    Jimmy Ba. Benchmarking model-based reinforcement learning. arXiv
+                                                                                    preprint arXiv:1907.02057, 2019.
+
+                                                                              [32] Manuel Watter, Jost Springenberg, Joschka Boedecker, and Martin
+                                                                                    Riedmiller. Embed to control: A locally linear latent dynamics model
+                                                                                    for control from raw images. Advances in neural information processing
+                                                                                    systems, 28, 2015.
+
+                                                                              [33] Matthew O Williams, Ioannis G Kevrekidis, and Clarence W Rowley. A
+                                                                                    data‚Äìdriven approximation of the koopman operator: Extending dynamic
+                                                                                    mode decomposition. Journal of Nonlinear Science, 25(6):1307‚Äì1346,
+                                                                                    2015.
+
+                                                                              [34] Rana MM Yousef and Khalil El-Hindi. Locating Center Points for
+                                                                                    Radial Basis Function Networks Using Instance Reduction Techniques.
+                                                                                    University of Jordan, 2004.
+

@@ -1,0 +1,4 @@
+# Generated data and artifacts now live under the project-level outputs/
+# hierarchy and are ignored by the root .gitignore.
+__pycache__/
+*.pyc

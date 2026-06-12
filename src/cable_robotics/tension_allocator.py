@@ -93,6 +93,53 @@ def _group_moment_arm(
     )
 
 
+def antagonistic_torque_bounds(
+    tendon_jacobian: np.ndarray,
+    layout: AntagonisticLayout,
+    *,
+    f_pre: float = F_PRELOAD,
+    f_max: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return joint-torque bounds induced by cable-tension limits.
+
+    The bounds match :func:`solve_antagonistic_pair`: every cable starts at
+    ``f_pre`` and one antagonistic group may increase up to ``f_max``.
+    """
+    preload = float(f_pre)
+    maximum = float(f_max)
+    if not np.isfinite(preload) or not np.isfinite(maximum):
+        raise ValueError("f_pre and f_max must be finite")
+    if preload < 0.0 or maximum < preload:
+        raise ValueError("expected 0 <= f_pre <= f_max")
+
+    increment_max = maximum - preload
+    lower = np.empty(len(layout.dof_groups), dtype=np.float64)
+    upper = np.empty(len(layout.dof_groups), dtype=np.float64)
+    for joint in range(len(layout.dof_groups)):
+        m_positive = _group_moment_arm(
+            tendon_jacobian,
+            layout.positive_groups[joint],
+            layout.dof_groups[joint],
+        )
+        m_negative = _group_moment_arm(
+            tendon_jacobian,
+            layout.negative_groups[joint],
+            layout.dof_groups[joint],
+        )
+        tau_base = (m_positive + m_negative) * preload
+        candidates = np.array(
+            [
+                tau_base,
+                tau_base + m_positive * increment_max,
+                tau_base + m_negative * increment_max,
+            ],
+            dtype=np.float64,
+        )
+        lower[joint] = float(np.min(candidates))
+        upper[joint] = float(np.max(candidates))
+    return lower, upper
+
+
 def allocate_antagonistic_tensions(
     desired_torques: np.ndarray,
     tendon_jacobian: np.ndarray,

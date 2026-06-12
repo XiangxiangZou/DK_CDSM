@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
+import osqp
+from scipy import sparse
 
 
 @dataclass(frozen=True)
@@ -117,6 +119,7 @@ class KoopmanLqrTracker:
         self.rdbar = rdbar
         self.dmat = dmat
         self.emat = emat
+        self.hessian = hessian
         self.hinv = np.linalg.inv(hessian)
         self.nu = nu
         self.n_h = n_h
@@ -140,6 +143,111 @@ class KoopmanLqrTracker:
         grad = grad - self.dmat.T @ self.rdbar @ self.emat @ u_prev
         sol = -self.hinv @ grad
         return sol.reshape(self.n_h, self.nu)
+
+
+class KoopmanConstrainedMpcTracker(KoopmanLqrTracker):
+    """Finite-horizon Koopman MPC with linear control constraints."""
+
+    def __init__(
+        self,
+        A: np.ndarray,
+        B: np.ndarray,
+        C: np.ndarray,
+        cfg: LqrConfig,
+        *,
+        eps_abs: float = 1e-7,
+        eps_rel: float = 1e-7,
+        max_iter: int = 4000,
+    ) -> None:
+        super().__init__(A, B, C, cfg)
+        self.eps_abs = float(eps_abs)
+        self.eps_rel = float(eps_rel)
+        self.max_iter = int(max_iter)
+        self.last_status = "not_solved"
+        self.last_iterations = 0
+        self.last_objective = float("nan")
+        self._warm_start: np.ndarray | None = None
+
+    def solve(
+        self,
+        z0: np.ndarray,
+        ref_norm: np.ndarray,
+        u_prev_internal: np.ndarray,
+        *,
+        physical_from_internal: np.ndarray,
+        physical_lower_norm: np.ndarray,
+        physical_upper_norm: np.ndarray,
+    ) -> np.ndarray:
+        """Solve the constrained internal-control sequence.
+
+        ``physical_from_internal`` maps DKAC internal control to normalized
+        physical joint torque at the current linearization state.
+        """
+        z0 = np.asarray(z0, dtype=np.float64).reshape(-1)
+        ref = np.asarray(ref_norm, dtype=np.float64).reshape(-1)
+        u_prev = np.asarray(u_prev_internal, dtype=np.float64).reshape(self.nu)
+        mapping = np.asarray(physical_from_internal, dtype=np.float64)
+        if mapping.ndim != 2 or mapping.shape[1] != self.nu:
+            raise ValueError(
+                "physical_from_internal must have shape "
+                f"(physical_dim, {self.nu})"
+            )
+        physical_dim = mapping.shape[0]
+        lower = np.asarray(
+            physical_lower_norm,
+            dtype=np.float64,
+        ).reshape(physical_dim)
+        upper = np.asarray(
+            physical_upper_norm,
+            dtype=np.float64,
+        ).reshape(physical_dim)
+        if np.any(lower > upper):
+            raise ValueError("physical control lower bounds exceed upper bounds")
+
+        free_response = self.phi @ z0
+        grad = self.gamma.T @ self.qbar @ (free_response - ref)
+        grad = grad - self.dmat.T @ self.rdbar @ self.emat @ u_prev
+
+        constraint = sparse.kron(
+            sparse.eye(self.n_h, format="csc"),
+            sparse.csc_matrix(mapping),
+            format="csc",
+        )
+        lower_horizon = np.tile(lower, self.n_h)
+        upper_horizon = np.tile(upper, self.n_h)
+        problem = osqp.OSQP()
+        problem.setup(
+            P=sparse.csc_matrix(np.triu(2.0 * self.hessian)),
+            q=2.0 * grad,
+            A=constraint,
+            l=lower_horizon,
+            u=upper_horizon,
+            verbose=False,
+            polishing=False,
+            warm_starting=True,
+            eps_abs=self.eps_abs,
+            eps_rel=self.eps_rel,
+            max_iter=self.max_iter,
+        )
+        if self._warm_start is not None:
+            problem.warm_start(x=self._warm_start)
+        result = problem.solve(raise_error=False)
+        self.last_status = str(result.info.status)
+        self.last_iterations = int(result.info.iter)
+        self.last_objective = float(result.info.obj_val)
+        if result.x is None or not self.last_status.lower().startswith("solved"):
+            raise RuntimeError(
+                "Constrained MPC solve failed: "
+                f"status={self.last_status}, iterations={self.last_iterations}"
+            )
+
+        solution = np.asarray(result.x, dtype=np.float64).reshape(
+            self.n_h,
+            self.nu,
+        )
+        shifted = np.vstack([solution[1:], solution[-1:]])
+        self._warm_start = shifted.reshape(-1)
+        return solution
 
 
 def build_ramp_reference(

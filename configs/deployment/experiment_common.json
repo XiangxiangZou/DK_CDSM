@@ -6,5 +6,6 @@
   "cable_order": ["cable11", "cable12", "cable13", "cable14", "cable21", "cable22", "cable23", "cable24"],
   "prediction_modes": ["one_step", "rollout"],
   "control_capable_models": ["edmd", "dkuc", "dkac"],
-  "prediction_only_models": ["dkn"]
+  "prediction_only_models": ["dkn"],
+  "_kilc_note": "KILC now denotes the Yu-Tan-style lifted-state controller. Defaults live in configs/deployment/kilc_cartesian_circle.json."
 }

@@ -15,8 +15,26 @@ from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
-import osqp
 from scipy import sparse
+
+# osqp 仅在 KoopmanConstrainedMpcTracker 中使用，延迟导入以避免
+# 在无 osqp 环境中阻塞 LQR/ILC/ramp reference 等其他功能。
+_osqp_module = None
+
+
+def _require_osqp():
+    """Lazily import osqp; raises clear error if not installed."""
+    global _osqp_module
+    if _osqp_module is None:
+        try:
+            import osqp as _osqp  # type: ignore
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError(
+                "osqp is required for constrained MPC. "
+                "Install with: pip install osqp"
+            ) from None
+        _osqp_module = _osqp
+    return _osqp_module
 
 
 @dataclass(frozen=True)
@@ -215,7 +233,8 @@ class KoopmanConstrainedMpcTracker(KoopmanLqrTracker):
         )
         lower_horizon = np.tile(lower, self.n_h)
         upper_horizon = np.tile(upper, self.n_h)
-        problem = osqp.OSQP()
+        osqp_mod = _require_osqp()
+        problem = osqp_mod.OSQP()
         problem.setup(
             P=sparse.csc_matrix(np.triu(2.0 * self.hessian)),
             q=2.0 * grad,

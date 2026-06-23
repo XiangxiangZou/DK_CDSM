@@ -5,7 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from .runtime import DKACModel, DKNModel, DKUCModel, EDMDModel
+from .runtime import (
+    ContinuousDKUCModel,
+    DKACModel,
+    DKNModel,
+    DKUCModel,
+    EDMDModel,
+)
 
 PREDICTION_MODELS = ("edmd", "dkuc", "dkac", "dkn")
 CONTROL_MODELS = ("edmd", "dkuc", "dkac")
@@ -53,3 +59,15 @@ def load_control_model(
     if name not in CONTROL_MODELS:
         raise ValueError(f"{model_name} is not a linear-control model")
     return load_prediction_model(artifact_root, name, device)
+
+
+def load_continuous_dkuc_model(
+    artifact_root: str | Path,
+    device: str = "cpu",
+):
+    root = Path(artifact_root)
+    artifact_dir = root / "dkuc_continuous"
+    if not artifact_dir.exists() and (root / "best_dkuc_continuous.pt").exists():
+        artifact_dir = root
+    normalizer_dir = root if (root / "normalizers.json").exists() else root.parent
+    return ContinuousDKUCModel(artifact_dir, normalizer_dir, device)

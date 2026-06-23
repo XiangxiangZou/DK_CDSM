@@ -30,3 +30,21 @@ def test_cartesian_reference_shapes() -> None:
     )
     assert ref["xy_ref"].shape[1] == 2
     assert ref["xy_ref"].shape == ref["dxy_ref"].shape
+
+
+def test_kilc_circle_reference_duration_is_twenty_seconds() -> None:
+    ref = generate_cartesian_reference(
+        CartesianReferenceConfig(
+            kind="circle",
+            dt=0.01,
+            period=20.0,
+            num_cycles=1.0,
+            radius_x=0.45,
+            radius_y=0.45,
+        )
+    )
+
+    assert np.isclose(ref["t"][-1], 20.0)
+    assert ref["xy_ref"].shape == (2001, 2)
+    assert np.isfinite(ref["xy_ref"]).all()
+    assert np.isfinite(ref["dxy_ref"]).all()

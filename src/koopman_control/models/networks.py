@@ -77,6 +77,37 @@ class DKUCNetwork(nn.Module):
         return self.A(z) + self.B(u_norm)
 
 
+class ContinuousDKUCNetwork(DKUCNetwork):
+    """Continuous-time DKUC network used for Yu-Tan-style KILC.
+
+    The lifting map is the same state-embedded DKUC form as the discrete model:
+    ``z=[x_norm, phi(x_norm)]``. The linear layers represent continuous-time
+    dynamics ``zdot = A_c z + B_c u_norm``.
+    """
+
+    def _init_linear(self) -> None:
+        with torch.no_grad():
+            self.A.weight.zero_()
+            self.B.weight.zero_()
+            rows = min(self.state_dim, self.control_dim)
+            self.B.weight[:rows, :rows] = 0.01 * torch.eye(rows)
+
+    def derivative(
+        self,
+        z: torch.Tensor,
+        u_norm: torch.Tensor,
+    ) -> torch.Tensor:
+        return self.A(z) + self.B(u_norm)
+
+    def euler_step(
+        self,
+        z: torch.Tensor,
+        u_norm: torch.Tensor,
+        dt: float,
+    ) -> torch.Tensor:
+        return z + float(dt) * self.derivative(z, u_norm)
+
+
 class DKACNetwork(nn.Module):
     """Deep Koopman model with a state-dependent affine control map."""
 

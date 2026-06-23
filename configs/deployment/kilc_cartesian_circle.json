@@ -1,0 +1,43 @@
+{
+  "_comment": "Paper-aligned Yu-Tan KILC: PD feedback + lifted-space ILC, no Q-filter.",
+  "artifact_dir": "outputs/models/deployment_pipeline/latest_continuous_dkuc_placeholder",
+  "device": "cpu",
+  "dt": 0.01,
+  "xml_path": "assets/models/multi_joint_cable_driven_space_robot.xml",
+  "max_trials": 500,
+  "tau_limit": 120.0,
+  "f_preload": 50.0,
+  "f_max_cable": 2000.0,
+  "tag": "low_gain_ILC_80trials",
+  "reference": {
+    "trajectory": "circle",
+    "duration": 20.0,
+    "center_x": 4.5,
+    "center_y": 0.0,
+    "radius": 0.5,
+    "phase": 0.0,
+    "start_hold": 0.0,
+    "time_scaling": "quintic"
+  },
+  "ik": {
+    "site_name": "end_effector",
+    "max_iter": 200,
+    "tol": 0.00001,
+    "damping": 0.0001,
+    "max_step": 0.08,
+    "joint_margin": 0.15,
+    "smooth_window_s": 0.03,
+    "q_seed_a": 0.4,
+    "q_seed_b": -0.1
+  },
+  "kilc": {
+    "learning_rate": 1.0,
+    "adaptive_gain": 0.001,
+    "robust_gain": 0.001,
+    "robust_boundary": 0.1,
+    "feedback_kp_a": 80.0,
+    "feedback_kp_b": 70.0,
+    "feedback_kd_a": 8.0,
+    "feedback_kd_b": 7.0
+  }
+}

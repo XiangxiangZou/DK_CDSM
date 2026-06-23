@@ -207,6 +207,90 @@ class DKUCModel(_TorchRuntimeBase):
         )[0]
 
 
+class ContinuousDKUCModel(_TorchRuntimeBase):
+    """Continuous-time DKUC runtime for Yu-Tan-style KILC."""
+
+    name = "dkuc"
+    variant = "continuous"
+    control_mode = "zdot=A_c z+B_c u_norm"
+
+    def __init__(
+        self,
+        artifact_dir: str | Path,
+        normalizer_dir: str | Path,
+        device: str = "cpu",
+    ) -> None:
+        import torch
+
+        from koopman_control.models.networks import ContinuousDKUCNetwork
+
+        config = self._load_common(artifact_dir, normalizer_dir, device)
+        self.model = ContinuousDKUCNetwork(
+            lift_dim=int(config["lift_dim"]),
+            hidden=tuple(config["hidden"]),
+            activation=str(config["activation"]),
+            bound_lift=float(config["bound_lift"]),
+            state_dim=self.state_dim,
+            control_dim=self.control_dim,
+        ).to(self.device)
+        state = torch_load_state(
+            self.artifact_dir / "best_dkuc_continuous.pt",
+            self.device,
+        )
+        self.model.load_state_dict(state)
+        self.model.eval()
+        self._finish_common()
+        self._torch = torch
+
+    def lift(self, x_phys: np.ndarray) -> np.ndarray:
+        x_norm = self.x_normer.transform(
+            np.asarray(x_phys).reshape(1, -1)
+        ).astype(np.float32)
+        with self._torch.no_grad():
+            z = self.model.lift(
+                self._torch.from_numpy(x_norm).to(self.device)
+            )
+        return z.cpu().numpy().reshape(-1).astype(np.float64)
+
+    def derivative_latent(
+        self,
+        z: np.ndarray,
+        u_phys: np.ndarray,
+    ) -> np.ndarray:
+        u_norm = self.u_normer.transform(
+            np.asarray(u_phys).reshape(1, -1)
+        )[0]
+        return self.A @ np.asarray(z).reshape(-1) + self.B @ u_norm
+
+    def step_latent(
+        self,
+        z: np.ndarray,
+        u_phys: np.ndarray,
+        x_phys: np.ndarray | None = None,
+        dt: float = 0.01,
+    ) -> np.ndarray:
+        del x_phys
+        return np.asarray(z).reshape(-1) + float(dt) * self.derivative_latent(
+            z,
+            u_phys,
+        )
+
+    def recover_control_delta(self, u_norm_delta: np.ndarray) -> np.ndarray:
+        return (
+            np.asarray(u_norm_delta, dtype=np.float64).reshape(-1)
+            * self.u_normer.std
+        )
+
+    def recover_control(
+        self,
+        x_phys: np.ndarray,
+        internal_control: np.ndarray,
+    ) -> np.ndarray:
+        """Map normalized control delta back to physical torque (protocol)."""
+        del x_phys
+        return self.recover_control_delta(internal_control)
+
+
 class DKACModel(_TorchRuntimeBase):
     """DKAC artifact runtime."""
 

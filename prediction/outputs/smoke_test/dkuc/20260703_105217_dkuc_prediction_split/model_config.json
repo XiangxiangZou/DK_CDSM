@@ -1,0 +1,23 @@
+{
+  "model": "DKUC",
+  "config": {
+    "lift_dim": 64,
+    "hidden": [
+      128,
+      256,
+      128
+    ],
+    "activation": "elu",
+    "bound_lift": 1.0,
+    "window": 2,
+    "window_start": 4,
+    "epochs": 1,
+    "steps_per_epoch": 1,
+    "batch_size": 8,
+    "lr": 0.001,
+    "grad_clip": 5.0,
+    "weight_decay": 1e-05,
+    "w_state": 1.0,
+    "w_embed": 0.1
+  }
+}

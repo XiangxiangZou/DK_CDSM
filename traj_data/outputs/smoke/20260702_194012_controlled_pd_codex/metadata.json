@@ -1,0 +1,86 @@
+{
+  "mode": "controlled_pd",
+  "xml": "E:\\PhD_Project\\DK_CDSM\\traj_data\\assets\\multi_joint_cable_driven_space_robot.xml",
+  "dt": 0.01,
+  "seed": 42,
+  "state_order": [
+    "qa",
+    "qb",
+    "dqa",
+    "dqb"
+  ],
+  "input_order": [
+    "tau_a",
+    "tau_b"
+  ],
+  "cable_order": [
+    "cable11",
+    "cable12",
+    "cable13",
+    "cable14",
+    "cable21",
+    "cable22",
+    "cable23",
+    "cable24"
+  ],
+  "xml_joint_limits_rad": [
+    [
+      -1.5708,
+      1.5708
+    ],
+    [
+      -1.5708,
+      1.5708
+    ]
+  ],
+  "safe_joint_limits_rad": [
+    [
+      -1.445136,
+      1.445136
+    ],
+    [
+      -1.445136,
+      1.445136
+    ]
+  ],
+  "safe_joint_limits_deg": [
+    [
+      -82.80019362241774,
+      82.80019362241774
+    ],
+    [
+      -82.80019362241774,
+      82.80019362241774
+    ]
+  ],
+  "cable_tension_lower_bound_n": 20.0,
+  "cable_tension_upper_bound_n": null,
+  "joint_torque_limit_n_m": null,
+  "description": "PD tracking of large smooth random references sampled inside current MuJoCo physical joint limits.",
+  "parameters": {
+    "xml": "E:\\PhD_Project\\DK_CDSM\\traj_data\\assets\\multi_joint_cable_driven_space_robot.xml",
+    "out_dir": "traj_data\\outputs\\smoke_nocap",
+    "tag": "codex",
+    "traj": 1,
+    "steps": 2,
+    "dt": 0.01,
+    "seed": 42,
+    "limit_ratio": 0.92,
+    "q_init_ratio": 0.65,
+    "dq_init_range": 0.4,
+    "kp": [
+      80.0,
+      70.0
+    ],
+    "kd": [
+      8.0,
+      7.0
+    ],
+    "reference_waypoints": 9,
+    "reference_range_ratio": 0.95,
+    "guard_kp": 80.0,
+    "guard_kd": 6.0
+  },
+  "output_dir": "traj_data\\outputs\\smoke_nocap\\20260702_194012_controlled_pd_codex",
+  "dataset_file": "dataset.npz"
+}

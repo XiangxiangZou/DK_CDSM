@@ -1,0 +1,27 @@
+{
+  "finite_required_arrays": true,
+  "finite_by_array": {
+    "t": true,
+    "states": true,
+    "inputs": true,
+    "q_ref": false,
+    "dq_ref": false,
+    "cable_ctrl": true
+  },
+  "state_min": [
+    -1.297475185241008,
+    -1.570149505637338,
+    -0.6043687978554577,
+    -1.7780100721644971
+  ],
+  "state_max": [
+    1.5305149288928852,
+    1.586297861399662,
+    0.545504309077859,
+    1.9378507089904087
+  ],
+  "peak_abs_tau": 55.71570023656078,
+  "peak_cable_tension": 303061.92231053766,
+  "trajectory_count": 40,
+  "steps": 500
+}

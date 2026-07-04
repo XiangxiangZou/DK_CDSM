@@ -218,6 +218,78 @@ def load_json(path: str | Path) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# 数据集选择表
+# ---------------------------------------------------------------------------
+
+
+PREDICTION_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = PREDICTION_ROOT.parent
+DEFAULT_DATASET_CONFIG = PREDICTION_ROOT / "dataset_selections.json"
+
+
+def _project_path(value: str | Path) -> Path:
+    """Resolve relative artifact paths from the repository root."""
+    path = Path(value)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def resolve_dataset_selection(
+    *,
+    method: str,
+    train_dataset: str | Path = "",
+    val_dataset: str | Path = "",
+    dataset_key: str = "",
+    dataset_config: str | Path = DEFAULT_DATASET_CONFIG,
+) -> tuple[str, str, dict[str, Any]]:
+    """Resolve which dataset a prediction method should train on.
+
+    Explicit ``--train_dataset`` remains supported and has highest priority.
+    If it is omitted, ``dataset_key`` is resolved from ``dataset_config``.
+    When ``dataset_key`` is omitted too, the method-specific default is used.
+    """
+    if str(train_dataset):
+        return (
+            str(_project_path(train_dataset)),
+            str(_project_path(val_dataset)) if str(val_dataset) else "",
+            {
+                "source": "cli",
+                "method": method,
+                "dataset_key": "",
+                "train_dataset": str(train_dataset),
+                "val_dataset": str(val_dataset) if str(val_dataset) else "",
+            },
+        )
+
+    config_path = _project_path(dataset_config)
+    payload = load_json(config_path)
+    method_name = method.lower()
+    key = dataset_key or payload.get("method_defaults", {}).get(method_name, "")
+    if not key:
+        raise ValueError(
+            f"No dataset_key provided and no default configured for method '{method_name}'"
+        )
+    datasets = payload.get("datasets", {})
+    if key not in datasets:
+        raise ValueError(f"Dataset key '{key}' is not defined in {config_path}")
+    entry = dict(datasets[key])
+    train_value = entry.get("train_dataset") or entry.get("dataset_path")
+    if not train_value:
+        raise ValueError(f"Dataset key '{key}' has no train_dataset")
+    val_value = entry.get("val_dataset", "")
+    return (
+        str(_project_path(train_value)),
+        str(_project_path(val_value)) if val_value else "",
+        {
+            "source": "dataset_config",
+            "method": method_name,
+            "dataset_config": str(config_path),
+            "dataset_key": key,
+            "entry": entry,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # 数据集读写与验证
 # ---------------------------------------------------------------------------
 

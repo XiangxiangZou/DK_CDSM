@@ -19,6 +19,7 @@ from common import (
     load_json,
     load_train_val,
     make_device,
+    resolve_dataset_selection,
     save_dataset,
     save_json,
     save_normalizers,
@@ -290,8 +291,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Train and evaluate the DKAC Koopman prediction method.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--train_dataset", required=True)
+    parser.add_argument("--train_dataset", default="")
     parser.add_argument("--val_dataset", default="")
+    parser.add_argument("--dataset_config", default=str(Path(__file__).resolve().parent / "dataset_selections.json"))
+    parser.add_argument("--dataset_key", default="")
     parser.add_argument("--val_ratio", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=50)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="cuda")
@@ -325,7 +328,14 @@ def main() -> None:
     device = make_device(args.device)
     paths = create_prediction_run_paths("dkac", args.run_type, args.tag, args.out_dir or None)
     output = paths.artifact_dir
-    train_data, val_data, split_meta = load_train_val(args.train_dataset, args.val_dataset, args.val_ratio, args.seed)
+    train_dataset, val_dataset, dataset_selection = resolve_dataset_selection(
+        method="dkac",
+        train_dataset=args.train_dataset,
+        val_dataset=args.val_dataset,
+        dataset_key=args.dataset_key,
+        dataset_config=args.dataset_config,
+    )
+    train_data, val_data, split_meta = load_train_val(train_dataset, val_dataset, args.val_ratio, args.seed)
     save_dataset(output / "dataset_train.npz", train_data)
     save_dataset(output / "dataset_val.npz", val_data)
     x_normer, u_normer = fit_state_input_normalizers(train_data)
@@ -373,7 +383,9 @@ def main() -> None:
             "figures_dir": str(paths.figures_dir),
             "state_order": list(STATE_ORDER),
             "input_order": list(INPUT_ORDER),
-            "train_dataset": args.train_dataset,
+            "train_dataset": train_dataset,
+            "val_dataset": val_dataset,
+            "dataset_selection": dataset_selection,
             "split": split_meta,
             "config": asdict(config),
             "training": training,

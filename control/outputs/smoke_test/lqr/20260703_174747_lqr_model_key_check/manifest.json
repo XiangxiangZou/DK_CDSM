@@ -1,0 +1,46 @@
+{
+  "entry_script": "control/lqr_control.py",
+  "argv": [
+    "--model_key",
+    "edmd_smoke",
+    "--task",
+    "joint",
+    "--run_type",
+    "smoke_test",
+    "--tag",
+    "model_key_check",
+    "--T_track",
+    "0.03",
+    "--T_ramp",
+    "0.02",
+    "--horizon",
+    "2",
+    "--f_max_cable",
+    "-1"
+  ],
+  "python_executable": "D:\\Apps\\Anaconda3\\envs\\env_dk_cdsm\\python.exe",
+  "git_branch": "codex/sort_20260702",
+  "git_commit": "a2dd014d32701958f6c168253f497b61d8374769",
+  "created_at": "2026-07-03T17:47:47",
+  "artifact_dir": "E:\\PhD_Project\\DK_CDSM\\prediction\\outputs\\smoke_test\\edmd\\20260703_105217_edmd_prediction_split",
+  "model": "edmd",
+  "model_selection": {
+    "source": "model_config",
+    "controller": "lqr",
+    "model_config": "E:\\PhD_Project\\DK_CDSM\\control\\model_selections.json",
+    "model_key": "edmd_smoke",
+    "entry": {
+      "method": "edmd",
+      "artifact_dir": "prediction/outputs/smoke_test/edmd/20260703_105217_edmd_prediction_split",
+      "description": "EDMD smoke-test model trained from the controlled dataset."
+    }
+  },
+  "task": "joint",
+  "config": {
+    "horizon": 2,
+    "Qq": 40.0,
+    "Qdq": 2.0,
+    "R": 0.001,
+    "Rd": 0.01
+  }
+}

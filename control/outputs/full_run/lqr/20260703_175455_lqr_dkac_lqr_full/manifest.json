@@ -1,0 +1,38 @@
+{
+  "entry_script": "control/lqr_control.py",
+  "argv": [
+    "--model_key",
+    "dkac_full",
+    "--task",
+    "circle",
+    "--run_type",
+    "full_run",
+    "--tag",
+    "dkac_lqr_full"
+  ],
+  "python_executable": "D:\\Apps\\Anaconda3\\envs\\env_dk_cdsm\\python.exe",
+  "git_branch": "codex/sort_20260702",
+  "git_commit": "a2dd014d32701958f6c168253f497b61d8374769",
+  "created_at": "2026-07-03T17:54:56",
+  "artifact_dir": "E:\\PhD_Project\\DK_CDSM\\prediction\\outputs\\full_run\\dkac\\20260703_155117_dkac",
+  "model": "dkac",
+  "model_selection": {
+    "source": "model_config",
+    "controller": "lqr",
+    "model_config": "E:\\PhD_Project\\DK_CDSM\\control\\model_selections.json",
+    "model_key": "dkac_full",
+    "entry": {
+      "method": "dkac",
+      "artifact_dir": "prediction/outputs/full_run/dkac/20260703_155117_dkac",
+      "description": "DKAC full-run model trained from the controlled dataset."
+    }
+  },
+  "task": "circle",
+  "config": {
+    "horizon": 30,
+    "Qq": 40.0,
+    "Qdq": 2.0,
+    "R": 0.001,
+    "Rd": 0.01
+  }
+}

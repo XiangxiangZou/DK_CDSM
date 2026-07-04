@@ -1,0 +1,42 @@
+{
+  "models": {
+    "dkac": {
+      "rmse_q": 0.0034670117958737483,
+      "rmse_q_by_joint": [
+        0.004281616093546466,
+        0.0023891641243203314
+      ],
+      "max_abs_q_error": 0.0052461596998710225,
+      "rmse_dq": 0.0026376880798958738,
+      "peak_abs_tau": 47.9032921914988,
+      "peak_cable_tension": 180.37058943705503,
+      "mean_solve_ms": 0.28229449984792154,
+      "max_solve_ms": 13.519400003133342,
+      "cartesian": {
+        "rmse_ee": 0.015003717290935036,
+        "rmse_ee_by_axis": [
+          0.006699628638673299,
+          0.020133008746744112
+        ],
+        "max_abs_ee_error": 0.02611343343878264,
+        "rmse_ik": 1.3682340423246765e-05,
+        "max_abs_ik_error": 3.5379851961003794e-05
+      }
+    }
+  },
+  "task": "circle",
+  "figures": [
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\joint_position_tracking.png",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\joint_position_tracking.pdf",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\joint_velocity_tracking.png",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\joint_velocity_tracking.pdf",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\joint_torque_command.png",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\joint_torque_command.pdf",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\cable_tensions.png",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\cable_tensions.pdf",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\cartesian_path.png",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\cartesian_path.pdf",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\cartesian_coordinate_tracking.png",
+    "E:\\PhD_Project\\DK_CDSM\\control\\outputs\\full_run\\figures\\20260703_175455_lqr_dkac_lqr_full\\cartesian_coordinate_tracking.pdf"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "entry_script": "control/lqr_control.py",
+  "argv": [
+    "--artifact_dir",
+    ".\\prediction\\outputs\\smoke_test\\edmd\\20260703_105217_edmd_prediction_split",
+    "--model",
+    "edmd",
+    "--task",
+    "joint",
+    "--run_type",
+    "smoke_test",
+    "--tag",
+    "edmd_lqr_check",
+    "--T_track",
+    "0.03",
+    "--T_ramp",
+    "0.02",
+    "--horizon",
+    "2",
+    "--f_max_cable",
+    "-1"
+  ],
+  "python_executable": "D:\\Apps\\Anaconda3\\envs\\env_dk_cdsm\\python.exe",
+  "git_branch": "codex/sort_20260702",
+  "git_commit": "a2dd014d32701958f6c168253f497b61d8374769",
+  "created_at": "2026-07-03T17:02:53",
+  "artifact_dir": "prediction\\outputs\\smoke_test\\edmd\\20260703_105217_edmd_prediction_split",
+  "model": "edmd",
+  "task": "joint",
+  "config": {
+    "horizon": 2,
+    "Qq": 40.0,
+    "Qdq": 2.0,
+    "R": 0.001,
+    "Rd": 0.01
+  }
+}

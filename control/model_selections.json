@@ -1,0 +1,29 @@
+{
+  "_comment": "Control-stage model selection table. Use model_key to choose which prediction artifact a controller should load.",
+  "models": {
+    "edmd_smoke": {
+      "method": "edmd",
+      "artifact_dir": "prediction/outputs/smoke_test/edmd/20260703_105217_edmd_prediction_split",
+      "description": "EDMD smoke-test model trained from the controlled dataset."
+    },
+    "dkuc_smoke": {
+      "method": "dkuc",
+      "artifact_dir": "prediction/outputs/smoke_test/dkuc/20260703_105217_dkuc_prediction_split",
+      "description": "DKUC smoke-test model trained from the controlled dataset."
+    },
+    "dkac_smoke": {
+      "method": "dkac",
+      "artifact_dir": "prediction/outputs/smoke_test/dkac/20260703_155043_dkac",
+      "description": "DKAC smoke-test model trained from the controlled dataset."
+    },
+    "dkac_full": {
+      "method": "dkac",
+      "artifact_dir": "prediction/outputs/full_run/dkac/20260703_155117_dkac",
+      "description": "DKAC full-run model trained from the controlled dataset."
+    }
+  },
+  "controller_defaults": {
+    "lqr": "edmd_smoke",
+    "mpc": "dkac_full"
+  }
+}

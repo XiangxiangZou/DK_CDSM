@@ -1,0 +1,21 @@
+{
+  "_comment": "Prediction-stage dataset selection table. Use dataset_key to switch a method to a different collected dataset without rewriting long paths.",
+  "datasets": {
+    "controlled_main": {
+      "description": "Default controlled dataset collected from traj_data full_run.",
+      "train_dataset": "traj_data/outputs/full_run/trainset_controlled.npz",
+      "val_dataset": ""
+    },
+    "uncontrolled_main": {
+      "description": "Default uncontrolled/open-loop dataset collected from traj_data full_run.",
+      "train_dataset": "traj_data/outputs/full_run/trainset_uncontrolled.npz",
+      "val_dataset": ""
+    }
+  },
+  "method_defaults": {
+    "edmd": "controlled_main",
+    "dkuc": "controlled_main",
+    "dkac": "controlled_main",
+    "dkn": "controlled_main"
+  }
+}

@@ -11,17 +11,21 @@ from typing import Any
 
 import numpy as np
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from io_utils import DEFAULT_XML, make_output_dir, manifest, save_json
 from cable_interface import apply_joint_torque
 from references import build_cartesian_circle_reference, ik_config_from_args
 
 from cdsm.kinematics.ik import MujocoSiteIK
 from cdsm.plants.mujoco import MujocoCablePlant
-from koopman_control.evaluation.tracking import (
+from common.control_metrics import (
     cartesian_tracking_metrics,
     tracking_metrics,
 )
-from koopman_control.models.registry import load_continuous_dkuc_model
+from common.kilc_model import load_continuous_dkuc_model
 
 
 @dataclass(frozen=True)

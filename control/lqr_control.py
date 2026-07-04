@@ -15,6 +15,10 @@ from pathlib import Path
 
 import numpy as np
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from io_utils import DEFAULT_XML, make_output_dir, manifest, save_json
 from cable_interface import apply_joint_torque
 from model_artifacts import load_prediction_control_model, resolve_model_selection
@@ -27,7 +31,7 @@ from references import (
 
 from cdsm.kinematics.ik import MujocoSiteIK
 from cdsm.plants.mujoco import MujocoCablePlant
-from koopman_control.evaluation.tracking import (
+from common.control_metrics import (
     cartesian_tracking_metrics,
     tracking_metrics,
 )

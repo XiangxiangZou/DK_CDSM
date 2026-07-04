@@ -9,14 +9,11 @@ from typing import Any
 
 import numpy as np
 
-from io_utils import PROJECT_ROOT
+from common.io_utils import PROJECT_ROOT
 
 PREDICTION_ROOT = PROJECT_ROOT / "prediction"
-for root in (str(PROJECT_ROOT), str(PREDICTION_ROOT)):
-    while root in sys.path:
-        sys.path.remove(root)
-sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(1, str(PREDICTION_ROOT))
+if str(PREDICTION_ROOT) not in sys.path:
+    sys.path.insert(0, str(PREDICTION_ROOT))
 
 DEFAULT_MODEL_CONFIG = PROJECT_ROOT / "control" / "model_selections.json"
 

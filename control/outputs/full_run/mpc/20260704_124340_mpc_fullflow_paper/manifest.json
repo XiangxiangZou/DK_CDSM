@@ -1,0 +1,51 @@
+{
+  "entry_script": "control/mpc_control.py",
+  "argv": [
+    "--run_type",
+    "full_run",
+    "--device",
+    "cuda",
+    "--artifact_dir",
+    ".\\prediction\\outputs\\full_run\\dkac\\20260704_121951_dkac_fullflow_paper",
+    "--trajectory",
+    "star",
+    "--period",
+    "20",
+    "--num_cycles",
+    "1",
+    "--start_hold",
+    "0",
+    "--radius",
+    "0.45",
+    "--inner_radius_ratio",
+    "0.382",
+    "--tag",
+    "fullflow_paper"
+  ],
+  "python_executable": "D:\\Apps\\Anaconda3\\envs\\env_dk_cdsm\\python.exe",
+  "git_branch": "",
+  "git_commit": "",
+  "created_at": "2026-07-04T12:43:40",
+  "artifact_dir": "C:\\Users\\ZouXiangxiang\\AppData\\Local\\Temp\\DK_CDSM_fullflow_20260704_121823\\prediction\\outputs\\full_run\\dkac\\20260704_121951_dkac_fullflow_paper",
+  "model": "dkac",
+  "model_selection": {
+    "source": "cli",
+    "controller": "mpc",
+    "model_key": "",
+    "artifact_dir": ".\\prediction\\outputs\\full_run\\dkac\\20260704_121951_dkac_fullflow_paper",
+    "method": "dkac"
+  },
+  "trajectory": "star",
+  "config": {
+    "horizon": 40,
+    "Qq": 60.0,
+    "Qdq": 3.0,
+    "R": 0.001,
+    "Rd": 0.02
+  },
+  "constraints": {
+    "equivalent_torque_limit": null,
+    "f_preload_n": 20.0,
+    "f_max_cable_n": 1000.0
+  }
+}

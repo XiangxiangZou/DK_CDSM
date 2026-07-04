@@ -12,17 +12,22 @@ from pathlib import Path
 import numpy as np
 from scipy import sparse
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from io_utils import DEFAULT_XML, make_output_dir, manifest, save_json
 from cable_interface import (
     apply_joint_torque,
     joint_torque_bounds_from_cable_limits,
 )
 from model_artifacts import load_prediction_control_model, resolve_model_selection
-from references import build_cartesian_circle_reference, ik_config_from_args
+from plotting import figures_dir_for_result, plot_closed_loop
+from references import build_cartesian_reference, ik_config_from_args
 
 from cdsm.kinematics.ik import MujocoSiteIK
 from cdsm.plants.mujoco import MujocoCablePlant
-from koopman_control.evaluation.tracking import (
+from common.control_metrics import (
     cartesian_tracking_metrics,
     tracking_metrics,
 )
@@ -264,11 +269,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--Rd", type=float, default=2e-2)
     parser.add_argument("--f_preload", type=float, default=20.0)
     parser.add_argument("--f_max_cable", type=float, default=1000.0)
+    parser.add_argument("--trajectory", choices=("circle", "star"), default="circle")
     parser.add_argument("--period", type=float, default=10.0)
     parser.add_argument("--num_cycles", type=float, default=1.0)
     parser.add_argument("--center_x", type=float, default=5.0)
     parser.add_argument("--center_y", type=float, default=0.0)
     parser.add_argument("--radius", type=float, default=0.45)
+    parser.add_argument("--inner_radius_ratio", type=float, default=0.382)
     parser.add_argument("--phase", type=float, default=0.0)
     parser.add_argument("--start_hold", type=float, default=1.0)
     parser.add_argument("--time_scaling", choices=("linear", "quintic"), default="quintic")
@@ -296,7 +303,7 @@ def main() -> None:
         model_config=args.model_config,
     )
     ik_solver = MujocoSiteIK(args.xml, args.dt, ik_config_from_args(args))
-    reference = build_cartesian_circle_reference(args, ik_solver)
+    reference = build_cartesian_reference(args, ik_solver)
     np.savez_compressed(output / "arrays" / "reference.npz", **reference)
     save_json(
         output / "manifest.json",
@@ -305,6 +312,7 @@ def main() -> None:
             "artifact_dir": artifact_dir,
             "model": model_name,
             "model_selection": model_selection,
+            "trajectory": args.trajectory,
             "config": asdict(cfg),
             "constraints": {
                 "equivalent_torque_limit": None,
@@ -346,7 +354,9 @@ def main() -> None:
         "mean_iterations": float(np.mean(log["mpc_iterations"])),
         "max_iterations": int(np.max(log["mpc_iterations"])),
     }
-    save_json(output / "metrics" / "tracking_metrics.json", {"models": {"dkac": values}})
+    metrics: dict[str, object] = {"models": {"dkac": values}, "trajectory": args.trajectory}
+    metrics["figures"] = plot_closed_loop(log, figures_dir_for_result(output), label="dkac")
+    save_json(output / "metrics" / "tracking_metrics.json", metrics)
     print(f"[mpc] dkac: rmse_q={values['rmse_q']:.6g}")
     print(f"[done] {output}")
 

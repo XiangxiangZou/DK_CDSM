@@ -222,8 +222,8 @@ def load_json(path: str | Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-PREDICTION_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = PREDICTION_ROOT.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PREDICTION_ROOT = PROJECT_ROOT / "prediction"
 DEFAULT_DATASET_CONFIG = PREDICTION_ROOT / "dataset_selections.json"
 
 
@@ -557,7 +557,7 @@ def prediction_output_base(method: str, run_type: str = "full_run") -> Path:
     del method
     if run_type not in {"full_run", "smoke_test"}:
         raise ValueError("run_type must be 'full_run' or 'smoke_test'")
-    return Path(__file__).resolve().parent / "outputs" / run_type
+    return PREDICTION_ROOT / "outputs" / run_type
 
 
 def create_prediction_run_paths(

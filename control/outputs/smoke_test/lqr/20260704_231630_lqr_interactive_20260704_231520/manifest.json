@@ -1,0 +1,38 @@
+{
+  "entry_script": "control/lqr_control.py",
+  "argv": [
+    "--run_type",
+    "smoke_test",
+    "--device",
+    "cuda",
+    "--artifact_dir",
+    "E:\\PhD_Project\\DK_CDSM\\prediction\\outputs\\smoke_test\\edmd\\20260704_231618_edmd_interactive_20260704_231520",
+    "--model",
+    "edmd",
+    "--task",
+    "circle",
+    "--tag",
+    "interactive_20260704_231520"
+  ],
+  "python_executable": "D:\\Apps\\Anaconda3\\envs\\env_dk_cdsm\\python.exe",
+  "git_branch": "codex/sort_20260702",
+  "git_commit": "daa48cbd788e28a0efb266313fdd04fde873dd05",
+  "created_at": "2026-07-04T23:16:30",
+  "artifact_dir": "E:\\PhD_Project\\DK_CDSM\\prediction\\outputs\\smoke_test\\edmd\\20260704_231618_edmd_interactive_20260704_231520",
+  "model": "edmd",
+  "model_selection": {
+    "source": "cli",
+    "controller": "lqr",
+    "model_key": "",
+    "artifact_dir": "E:\\PhD_Project\\DK_CDSM\\prediction\\outputs\\smoke_test\\edmd\\20260704_231618_edmd_interactive_20260704_231520",
+    "method": "edmd"
+  },
+  "task": "circle",
+  "config": {
+    "horizon": 30,
+    "Qq": 40.0,
+    "Qdq": 2.0,
+    "R": 0.001,
+    "Rd": 0.01
+  }
+}

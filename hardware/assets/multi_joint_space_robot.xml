@@ -1,0 +1,185 @@
+<mujoco model="multi_joint_space_robot">
+    <!-- ======================================================================
+         绳驱空间机械臂 —— 关节级抽象驱动版本
+         ======================================================================
+         本文件用于描述与 multi_joint_space_robot_model.py 完全对齐的 2-DOF
+         绳驱空间机械臂 MuJoCo 模型. 它保留了真实机构中的 8 根 spatial tendon
+         几何路径, 但控制输入并不直接作用在绳索上, 而是通过 2 个 <position>
+         执行器分别驱动 joint1、joint3:
+
+           - motor_qa -> joint1 -> 第一级 spreader1 / Link3 同步转动
+           - motor_qb -> joint3 -> 第二级 spreader2 / Link5 同步转动
+
+         与 multi_joint_space_robot_cable.xml 的核心区别:
+           - 本版本: 关节级抽象驱动, ctrl 直接表示期望关节角 qa_ref / qb_ref;
+                    适合验证运动学、动力学耦合和高层轨迹控制.
+           - cable 版本: 绳索级真实驱动, 使用 8 个 <motor tendon="...">
+                    对 cable11 ... cable24 施加张力, 更接近真实拮抗绳驱机构.
+
+         控制接口 (共 2 个输入):
+           ctrl[0] = qa_ref : 第一级关节期望角, 作用在 joint1
+           ctrl[1] = qb_ref : 第二级关节期望角, 作用在 joint3
+
+         机械耦合:
+           joint1 ≡ joint2,  joint3 ≡ joint4
+           因此虽然 XML 中有 4 个 hinge joint, 但有效自由度仍为 2.
+
+         机械/几何参数完全对齐 multi_joint_space_robot_model.py:
+           L1=L3=L5=2.0 m, L2=L4=0.2 m, Ls1=Ls2=0.6 m
+           m2=m4=1.161 kg (spreader body), m3=m5=2.866 kg (main arm)
+           Link1 为固定基座, 不参与动力学
+    ====================================================================== -->
+    <compiler angle="radian" coordinate="local" inertiafromgeom="auto"/>
+    <option gravity="0 0 0" integrator="RK4" timestep="0.01"/>
+
+    <visual>
+        <global offwidth="1280" offheight="960"/>
+    </visual>
+
+    <default>
+        <joint type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" damping="2.0"/>
+        <!-- NOTE: 与 8 绳索驱动 XML 保持一致, 这里刻意不写 rgba。
+             当前 MuJoCo 版本下, 如果 <default><geom> 里给了 rgba,
+             它会压过子 geom 上显式声明的 material, 导致主臂和 spreader
+             显示成同一种颜色。各 geom 的颜色完全交给各自 material 指定。 -->
+        <geom type="capsule" size="0.05"/>
+        <site size="0.04"/>
+        <!-- 绳索默认属性: 用于可视化真实绳驱几何路径; 在本关节级驱动版本中
+             tendon 不直接接受电机张力, 仅作为结构/路径说明与后续扩展接口. -->
+        <tendon width="0.01" rgba="1 1 1 1"/>
+    </default>
+
+    <asset>
+        <material name="mat_main_link" rgba="1 0.55 0 1"/>
+        <!-- 十字架 spreader 与副轴 link2/link4 统一使用蓝色, 便于和主连杆区分. -->
+        <material name="mat_spreader"  rgba="0.15 0.35 1.0 1"/>
+        <!-- 锚点 site 使用透明材质, 只保留绳索路径连接点的语义. -->
+        <material name="mat_anchor"    rgba="1 1 1 0"/>
+    </asset>
+
+    <worldbody>
+        <light pos="0 0 10" dir="0 0 -1" diffuse="1 1 1"/>
+
+        <!-- 基座锚点, 对应 Python 解析模型中的 p0. -->
+        <site name="anchor_base" pos="0 0 0" material="mat_anchor"/>
+
+        <!-- ================================================================ -->
+        <!-- Link 1: 固定基座 (L1 = 2.0 m)                                     -->
+        <!-- ================================================================ -->
+        <body name="link1" pos="0 0 0">
+            <geom name="geom_link1" fromto="0 0 0 2.0 0 0" size="0.05" material="mat_main_link" mass="2.866"/>
+
+            <!-- ============================================================ -->
+            <!-- Link 2: 第一级 spreader 主轴 (m2=1.161, L2=0.2)                -->
+            <!-- ============================================================ -->
+            <body name="link2" pos="2.0 0 0">
+                <joint name="joint1"/>
+                <inertial pos="0.1 0 0" mass="1.161" diaginertia="0.00387 0.00387 0.00387"/>
+                <geom name="geom_link2" fromto="0 0 0 0.2 0 0" size="0.04" material="mat_spreader" mass="0"/>
+
+                <!-- 第一级十字架 (Ls1 = 0.6 m): 居中于 Link2 中点 (0.1, 0, 0),
+                     沿 y 轴 +/-0.3 m 展开, 两端作为 cable11~14 的连接点. -->
+                <geom name="geom_spreader1" fromto="0.1 -0.3 0 0.1 0.3 0" size="0.03" material="mat_spreader" mass="0"/>
+                <site name="spreader1_top" pos="0.1  0.3 0" material="mat_anchor"/>
+                <site name="spreader1_bot" pos="0.1 -0.3 0" material="mat_anchor"/>
+
+                <!-- ======================================================== -->
+                <!-- Link 3: 第一级主连杆 (m3=2.866, L3=2.0)                    -->
+                <!-- ======================================================== -->
+                <body name="link3" pos="0.2 0 0">
+                    <joint name="joint2"/>
+                    <geom name="geom_link3" fromto="0 0 0 2.0 0 0" size="0.05" material="mat_main_link" mass="2.866"/>
+
+                    <site name="anchor_l3" pos="0 0 0"   material="mat_anchor"/>   <!-- p2: 第二级绳起点 -->
+                    <site name="target_l3" pos="2.0 0 0" material="mat_anchor"/>   <!-- p3: 第一级绳终点 -->
+
+                    <!-- ==================================================== -->
+                    <!-- Link 4: 第二级 spreader 主轴 (m4=1.161, L4=0.2)        -->
+                    <!-- ==================================================== -->
+                    <body name="link4" pos="2.0 0 0">
+                        <joint name="joint3"/>
+                        <inertial pos="0.1 0 0" mass="1.161" diaginertia="0.00387 0.00387 0.00387"/>
+                        <geom name="geom_link4" fromto="0 0 0 0.2 0 0" size="0.04" material="mat_spreader" mass="0"/>
+
+                        <!-- 第二级十字架 (Ls2 = 0.6 m): 结构与第一级相同,
+                             两端作为 cable21~24 的连接点. -->
+                        <geom name="geom_spreader2" fromto="0.1 -0.3 0 0.1 0.3 0" size="0.03" material="mat_spreader" mass="0"/>
+                        <site name="spreader2_top" pos="0.1  0.3 0" material="mat_anchor"/>
+                        <site name="spreader2_bot" pos="0.1 -0.3 0" material="mat_anchor"/>
+
+                        <!-- ================================================ -->
+                        <!-- Link 5: 第二级主连杆 (m5=2.866, L5=2.0)            -->
+                        <!-- ================================================ -->
+                        <body name="link5" pos="0.2 0 0">
+                            <joint name="joint4"/>
+                            <geom name="geom_link5" fromto="0 0 0 2.0 0 0" size="0.05" material="mat_main_link" mass="2.866"/>
+
+                            <site name="anchor_l5" pos="0   0 0" material="mat_anchor"/>
+                            <site name="target_l5" pos="2.0 0 0" material="mat_anchor"/>
+
+                            <!-- 末端执行器, 对应 Python 解析模型中的 p5. -->
+                            <site name="end_effector" pos="2.0 0 0" size="0.08" rgba="1 1 0 1"/>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+
+    <!-- ====================================================================
+         机械耦合: 十字架 spreader 的刚性几何迫使同侧两关节同步转动
+         joint1 ≡ joint2,  joint3 ≡ joint4  (与 Python 2-DOF 解析模型严格一致)
+
+         solref / solimp 采用较硬的约束参数, 用于减少软约束导致的振荡和
+         关节同步误差. 因此上层控制器只需要给 joint1 / joint3 写入期望角,
+         joint2 / joint4 会通过 equality constraint 跟随.
+    ==================================================================== -->
+    <equality>
+        <joint joint1="joint2" joint2="joint1" polycoef="0 1 0 0 0"
+               solref="0.005 1" solimp="0.99 0.999 0.0001"/>
+        <joint joint1="joint4" joint2="joint3" polycoef="0 1 0 0 0"
+               solref="0.005 1" solimp="0.99 0.999 0.0001"/>
+    </equality>
+
+    <!-- ====================================================================
+         8 根绳索 (spatial tendon): 几何路径与真实绳驱机构一致
+
+         注意: 本关节级抽象驱动版本中, 这些 tendon 不直接连接 actuator.
+         它们主要用于:
+           (1) 在 MuJoCo viewer 中可视化绳索路径;
+           (2) 与 Python 几何模型中的 p0~p5 / spreader top-bottom 点保持对应;
+           (3) 为切换到 multi_joint_space_robot_cable.xml 的绳索级驱动版本
+               提供一一对应的 cable 命名和路径参考.
+    ==================================================================== -->
+    <tendon>
+        <!-- 第一级 4 根绳索: 基座 / Link3 末端 -> spreader1 上下端 -->
+        <spatial name="cable11"><site site="anchor_base"/>  <site site="spreader1_top"/></spatial>
+        <spatial name="cable12"><site site="anchor_base"/>  <site site="spreader1_bot"/></spatial>
+        <spatial name="cable13"><site site="target_l3"/>    <site site="spreader1_top"/></spatial>
+        <spatial name="cable14"><site site="target_l3"/>    <site site="spreader1_bot"/></spatial>
+
+        <!-- 第二级 4 根绳索: Link3 首端 / Link5 末端 -> spreader2 上下端 -->
+        <spatial name="cable21"><site site="anchor_l3"/>    <site site="spreader2_top"/></spatial>
+        <spatial name="cable22"><site site="anchor_l3"/>    <site site="spreader2_bot"/></spatial>
+        <spatial name="cable23"><site site="target_l5"/>    <site site="spreader2_top"/></spatial>
+        <spatial name="cable24"><site site="target_l5"/>    <site site="spreader2_bot"/></spatial>
+    </tendon>
+
+    <!-- ====================================================================
+         关节级 position 执行器 (abstract joint-space actuation)
+
+         使用 MuJoCo 内置 <position> 执行器实现隐式积分 PD 控制, 避免在 Python
+         回调中手写高增益显式 PD 时引入数值振荡.
+
+         - motor_qa 作用在 joint1, 通过 equality 同步 joint2, 对应第一级角 qa.
+         - motor_qb 作用在 joint3, 通过 equality 同步 joint4, 对应第二级角 qb.
+         - kp / kv 对应 MuJoCo position actuator 的 PD 增益.
+         - ctrl 直接写入期望关节角 (rad), 控制顺序为 [qa_ref, qb_ref].
+         - ctrlrange = [-1.5, 1.5] rad, 略小于 joint range [-pi/2, pi/2],
+           给约束求解和控制饱和留出余量.
+    ==================================================================== -->
+    <actuator>
+        <motor name="motor_qa" joint="joint1" gear="1" ctrllimited="true" ctrlrange="-50 50"/>
+        <motor name="motor_qb" joint="joint3" gear="1" ctrllimited="true" ctrlrange="-50 50"/>
+    </actuator>
+</mujoco>

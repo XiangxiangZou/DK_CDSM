@@ -1,6 +1,7 @@
 # Generated experiment artifacts
 /output/
 /outputs/
+/hardware/outputs/
 /Figs/
 /mj_sim_log/
 /simulation_logs/

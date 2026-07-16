@@ -1,0 +1,123 @@
+\documentclass[journal,twoside,web]{ieeecolor}
+%\documentclass[journal,twoside]{ieeecolor}
+\usepackage{generic}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{algorithm,algorithmic}
+\usepackage{url}
+\usepackage{hyperref}
+\hypersetup{hidelinks=true}
+\usepackage{textcomp}
+\usepackage{cleveref}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{stfloats}
+\usepackage{comment}
+\usepackage{float}
+\usepackage{bm}
+%\usepackage{enumitem}
+\usepackage{multirow}
+\usepackage{caption}
+\captionsetup[figure]{font=small}
+\captionsetup[table]{font=small}
+
+% \usepackage{titlesec}
+% \titlespacing*{\section}{0pt}{2ex plus 0.5ex minus .2ex}{1.2ex plus .2ex}
+% \titlespacing*{\subsection}{0pt}{1.5ex plus 0.5ex minus .2ex}{1ex plus .2ex}
+
+\setlength{\abovedisplayskip}{5pt plus 1pt minus 1pt}
+\setlength{\belowdisplayskip}{5pt plus 1pt minus 1pt}
+\setlength{\abovedisplayshortskip}{2pt plus 1pt minus 1pt}
+\setlength{\belowdisplayshortskip}{2pt plus 1pt minus 1pt}
+
+% ---------- Theorem / Lemma / Definition Environments ----------
+\let\proof\relax
+\let\endproof\relax
+\usepackage{amsthm}
+\usepackage{etoolbox}
+\AtEndEnvironment{proof}{\hfill$\blacksquare$}
+
+
+% Theorem style: plain (italic text)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[]{Lemma}
+\newtheorem{proposition}[]{Proposition}
+% \newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{corollary}{Corollary}
+
+% Theorem style: definition (upright text)
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[]{Assumption}
+\newtheorem{example}[theorem]{Example}
+
+% Theorem style: remark (upright, italic label)
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+\newtheorem{note}{Note}
+
+\crefname{assumption}{assumption}{assumptions}
+\Crefname{assumption}{Assumption}{Assumptions}
+\crefname{theorem}{theorem}{theorems}
+\Crefname{theorem}{Theorem}{Theorems}
+\crefname{equation}{}{}
+
+% Optional: Custom QED symbol
+\renewcommand{\qedsymbol}{$\blacksquare$}
+
+% Custom commands
+\newcommand{\define}{\mathrel{\mathop:}=}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\markboth{\hskip25pc IEEE TRANSACTIONS AND JOURNALS TEMPLATE}
+{Author et al.: Paper Title}
+
+\begin{document}
+
+\title{Paper Title}
+
+\author{
+    Author 1,
+    Author 2,
+    and
+    Author 3
+    \thanks{Authors are with the Institution, City, Country.}
+}
+
+
+\maketitle
+
+\begin{abstract}
+% TODO: Write abstract here.
+\end{abstract}
+
+\begin{IEEEkeywords}
+% TODO: Add keywords here.
+\end{IEEEkeywords}
+
+
+\input{section/en/1_intro}
+\input{section/en/2_related}
+\input{section/en/3_preliminary}
+\input{section/en/4_theory}
+\input{section/en/5_method}
+\input{section/en/6_experiment}
+\input{section/en/7_conclusion}
+\input{section/en/8_acknowledgment}
+
+% \appendices
+
+\bibliographystyle{IEEEtran}
+\bibliography{reference.bib}
+
+%\input{section/en/bio}
+
+% \clearpage
+% \newpage
+% \appendix
+% \input{section/en/X_supplementary}
+
+\end{document}

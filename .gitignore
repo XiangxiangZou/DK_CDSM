@@ -44,6 +44,23 @@ tensorboard/
 *.swo
 ~$*
 
+# LaTeX / arXiv auxiliary files
+*.aux
+*.out
+*.blg
+*.bbl
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+*.toc
+*.lof
+*.lot
+*eps-converted-to.pdf
+
+# LaTeX paper working files (not for submission)
+arXiv_CDSM/draft_notes/
+arXiv_CDSM/references files/
+
 # Local IDE and operating-system files
 .idea/
 .vscode/

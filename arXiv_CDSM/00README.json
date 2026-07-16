@@ -1,0 +1,25 @@
+{
+   "sources" : [
+      {
+         "usage" : "toplevel",
+         "filename" : "main_en.tex"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figure/logo/logo-eps-converted-to.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figure/logo/logo.eps"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "reference.bib"
+      }
+   ],
+   "spec_version" : 1,
+   "texlive_version" : "2025",
+   "process" : {
+      "compiler" : "pdflatex"
+   }
+}

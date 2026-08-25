@@ -9,25 +9,47 @@ These rules apply to the repository root and all subdirectories. A nested
 
 ## 1. Required Python Environment
 
-The project Python environment is:
+The project uses the Conda environment named `env_dk_cdsm`. Select the
+configured executable for the current operating system:
 
 ```text
+Windows:
 PYTHON_ENV_PATH=D:\Apps\Anaconda3\envs\env_dk_cdsm
 PYTHON_EXE=D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe
+
+Linux:
+PYTHON_ENV_PATH=/home/zouxx/Apps/miniconda3/envs/env_dk_cdsm
+PYTHON_EXE=/home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python
 ```
 
-All Python scripts, modules, tests, and package operations must use
-`PYTHON_EXE`. Do not use bare `python`, `pip`, or `pytest`.
+All Python scripts, modules, tests, and package operations must use the
+platform-appropriate `PYTHON_EXE`. Do not use bare `python`, `pip`, or
+`pytest`, and do not silently fall back to another Conda environment.
 
-Before the first Python command in a task, verify the interpreter:
+Before the first Python command in a task, verify the interpreter.
+
+Windows PowerShell:
 
 ```powershell
 & 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -c "import sys; print(sys.executable)"
 ```
 
-The output must resolve to the configured executable. If the environment is
-missing or broken, stop and report the problem instead of silently switching
-to another environment.
+Linux shell:
+
+```bash
+env -u PYTHONPATH /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
+  -c "import platform, sys; print(sys.executable); print(platform.system())"
+```
+
+The Linux host may have ROS 2 in `PYTHONPATH` with a different Python minor
+version. Prefix project Python commands with `env -u PYTHONPATH` so packages
+under `/opt/ros` do not leak into this Conda environment. Add a task-specific
+`PYTHONPATH` only after clearing the inherited value when it is genuinely
+required.
+
+The output must resolve to the configured executable and current operating
+system. If that environment is missing or broken, stop and report the problem
+instead of switching environments.
 
 ## 2. Start-of-Task Checklist
 
@@ -87,14 +109,30 @@ For code or experiment tasks, follow this order:
    exit code.
 8. Report the exact command, important parameters, metrics, and output paths.
 
-Run experiment entries as modules from the repository root:
+Run experiment entries as modules from the repository root.
+
+Windows PowerShell:
 
 ```powershell
 & 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -m experiments.deployment_pipeline.collect_data --help
 ```
 
+Linux shell:
+
+```bash
+env -u PYTHONPATH /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
+  -m experiments.deployment_pipeline.collect_data --help
+```
+
 Prefer `-m experiments...` over invoking experiment files by path so imports
 remain stable.
+
+Keep source and configuration paths portable: use `pathlib.Path` in Python,
+resolve project resources relative to the repository or module, and do not
+persist machine-specific Windows or Linux absolute paths in stable configs or
+manifests. Do not construct paths by concatenating `\` or `/`. Existing
+PowerShell and batch entry points may remain, but new Python entry points must
+also run from a Linux shell.
 
 ## 5. Experiment Reproducibility
 
@@ -165,10 +203,18 @@ Rules:
 
 ## 7. Testing and Verification
 
-Use the configured interpreter:
+Use the configured interpreter.
+
+Windows PowerShell:
 
 ```powershell
 & 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -m pytest
+```
+
+Linux shell:
+
+```bash
+env -u PYTHONPATH /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python -m pytest
 ```
 
 Minimum expectations:
@@ -181,15 +227,43 @@ Minimum expectations:
 - Visualization edit: verify that generated files open and inspect at least
   one representative image or animation frame.
 
+For non-interactive Linux runs, use `MPLBACKEND=Agg` for Matplotlib. If the
+agent sandbox cannot write the user's Matplotlib configuration directory, set
+`MPLCONFIGDIR` to a task-specific directory under `/tmp`. Use `MUJOCO_GL=egl`
+for headless MuJoCo rendering when EGL is available, and report a skipped
+render check rather than replacing the configured Python environment if the
+host has no compatible graphics backend.
+
 If a test cannot be run, state the reason and the remaining risk.
 
 ## 8. Dependency Policy
 
-Dependencies may be changed only in the configured environment:
+Dependencies may be changed only in the configured environment.
+
+Windows PowerShell:
 
 ```powershell
 & 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -m pip install <package>
 ```
+
+Linux shell:
+
+```bash
+env -u PYTHONPATH /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
+  -m pip install <package>
+```
+
+Install the locked Linux dependencies with:
+
+```bash
+env -u PYTHONPATH /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
+  -m pip install -r requirements.txt \
+  --extra-index-url https://download.pytorch.org/whl/cu121
+```
+
+The additional index is required for the locked
+`torch==2.5.1+cu121` wheel. After installation, run `-m pip check` with the
+same interpreter and Linux `PYTHONPATH` isolation.
 
 After installing, upgrading, or removing a package:
 

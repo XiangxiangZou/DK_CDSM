@@ -47,6 +47,7 @@ class DKUCConfig:
     weight_decay: float = 1e-5
     w_state: float = 1.0
     w_embed: float = 0.1
+    include_constant: bool = False
 
 
 def activation_layer(name: str):
@@ -80,7 +81,8 @@ def make_network_class():
             self.state_dim = int(state_dim)
             self.control_dim = int(control_dim)
             self.lift_dim = int(config.lift_dim)
-            self.latent_dim = self.state_dim + self.lift_dim
+            self.include_constant = bool(config.include_constant)
+            self.latent_dim = self.state_dim + self.lift_dim + int(self.include_constant)
             self.encoder = mlp((self.state_dim, *tuple(config.hidden), self.lift_dim), config.activation)
             self.A = nn.Linear(self.latent_dim, self.latent_dim, bias=False)
             self.B = nn.Linear(self.control_dim, self.latent_dim, bias=False)
@@ -95,7 +97,10 @@ def make_network_class():
             features = self.encoder(x_norm)
             if self.bound_lift > 0.0:
                 features = self.bound_lift * torch.tanh(features / self.bound_lift)
-            return torch.cat([x_norm, features], dim=-1)
+            values = [x_norm, features]
+            if self.include_constant:
+                values.append(torch.ones_like(x_norm[..., :1]))
+            return torch.cat(values, dim=-1)
 
         def state_from_latent(self, z):
             return z[..., : self.state_dim]

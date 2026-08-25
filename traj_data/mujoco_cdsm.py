@@ -307,6 +307,8 @@ class MujocoCDSM:
         self.data.qpos[:] = 0.0
         self.data.qvel[:] = 0.0
         self.data.ctrl[:] = 0.0
+        self.data.qfrc_applied[:] = 0.0
+        self.data.time = 0.0
         # 写入主动关节位置和速度
         self.data.qpos[self.indices["active_qpos"]] = q
         self.data.qvel[self.indices["active_dof"]] = dq
@@ -447,6 +449,31 @@ class MujocoCDSM:
         """
         values = np.asarray(tensions, dtype=np.float64).reshape(8)
         self.data.ctrl[self.indices["actuator_ids"]] = values
+
+    def apply_joint_disturbance(self, torque: np.ndarray) -> None:
+        """Apply an external torque to the two active joint DOFs.
+
+        The disturbance is deliberately separate from the cable-produced
+        ``applied_torque`` used by identification. This makes the absolute-time
+        sine torque an unobserved change in the state transition law.
+        """
+        values = np.asarray(torque, dtype=np.float64).reshape(2)
+        self.data.qfrc_applied[:] = 0.0
+        self.data.qfrc_applied[self.indices["active_dof"]] = values
+
+    def equivalent_joint_torque(
+        self,
+        tensions: np.ndarray,
+        tendon_jacobian: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """Map cable tensions to the two equivalent active-joint torques."""
+        values = np.asarray(tensions, dtype=np.float64).reshape(8)
+        jac = self.compute_tendon_jacobian() if tendon_jacobian is None else np.asarray(
+            tendon_jacobian, dtype=np.float64
+        )
+        arm_a = jac[:, int(self.indices["dof_j1"])] + jac[:, int(self.indices["dof_j2"])]
+        arm_b = jac[:, int(self.indices["dof_j3"])] + jac[:, int(self.indices["dof_j4"])]
+        return np.array([arm_a @ values, arm_b @ values], dtype=np.float64)
 
     # -----------------------------------------------------------------------
     # 仿真步进

@@ -65,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-type", choices=("smoke", "full"), default="smoke")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--tag", default="")
+    parser.add_argument("--seed", type=int, default=None, help="Override the configured reproducibility seed")
     parser.add_argument("--run-id", default="", help="Use an exact run id instead of a timestamped id")
     parser.add_argument(
         "--output-root",
@@ -184,6 +185,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     config_path = args.config if args.config.is_absolute() else PROJECT_ROOT / args.config
     output_root = args.output_root if args.output_root.is_absolute() else PROJECT_ROOT / args.output_root
     config = load_foundation_config(config_path, args.run_type)
+    if args.seed is not None:
+        config["seed"] = int(args.seed)
     selected_device = _device(args.device)
     run_id = _run_id(args)
     git = _git_provenance()
@@ -369,6 +372,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
             "device_requested": args.device,
             "device_used": selected_device,
             "tag": args.tag,
+            "seed_override": args.seed,
             "output_root": _portable(output_root, output_root),
         },
         "seed": int(config["seed"]),

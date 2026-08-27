@@ -48,11 +48,11 @@ batch latent RMSE 中位数标定；10 个 seed 的实际 epsilon 均写入各 r
 新增：
 
 - `DKTV_PLAN_03_FORMULA_MAPPING.md`
-- `configs/dktv/plan_03.json`
-- `src/koopman_control/dktv/window_update.py`
-- `src/koopman_control/dktv/selective_update.py`
-- `experiments/dktv/plan_03.py`
-- `experiments/dktv/aggregate_plan_03.py`
+- `prediction/dktv_window_config.json`
+- `prediction/dktv/window_update.py`
+- `prediction/dktv/selective_update.py`
+- `prediction/dktv_window_prediction.py`
+- `prediction/dktv_window_aggregate.py`
 - `tests/dktv/__init__.py`
 - `tests/dktv/test_window_update.py`
 - `tests/dktv/test_selective_update.py`
@@ -61,8 +61,8 @@ batch latent RMSE 中位数标定；10 个 seed 的实际 epsilon 均写入各 r
 
 修改：
 
-- `src/koopman_control/dktv/online_model.py`：窗口 replay、统一评价接入和汇总；
-- `src/koopman_control/dktv/__init__.py`：导出窗口 updater。
+- `prediction/dktv/online_model.py`：窗口 replay、统一评价接入和汇总；
+- `prediction/dktv/__init__.py`：导出窗口 updater。
 
 Plan 01/02 既有修改和用户审查文档均保留，未回滚、覆盖、提交或推送。
 

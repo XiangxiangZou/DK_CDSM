@@ -106,16 +106,16 @@ rollout、nominal/transition/time-varying 分阶段结果及逐时刻模型版�
 ## 4. 文件变更
 
 - `DKTV_PLAN_02_FORMULA_MAPPING.md`
-- `configs/dktv/plan_02.json`
-- `src/koopman_control/dktv/least_squares.py`
-- `src/koopman_control/dktv/accumulative_update.py`
-- `src/koopman_control/dktv/online_model.py`
-- `src/koopman_control/dktv/__init__.py`
-- `experiments/dktv/plan_02.py`
-- `experiments/dktv/aggregate_plan_02.py`
-- `experiments/dktv/plan_01.py`：增加显式 `--seed` override，用于独立多 seed
+- `prediction/dktv_accumulative_config.json`
+- `prediction/dktv/least_squares.py`
+- `prediction/dktv/accumulative_update.py`
+- `prediction/dktv/online_model.py`
+- `prediction/dktv/__init__.py`
+- `prediction/dktv_accumulative_prediction.py`
+- `prediction/dktv_accumulative_aggregate.py`
+- `prediction/dktv_foundation_prediction.py`：增加显式 `--seed` override，用于独立多 seed
   Plan 01 数据和初始 artifact；
-- `tests/test_dktv_accumulative.py`
+- `tests/dktv/test_accumulative.py`
 - `DKTV_PLAN_02_EXECUTION_FEEDBACK.md`（本报告）
 
 本轮开始时工作树为 clean。`AGENTS.md` 和既有 Plan 01/Plan 03 实现或文档未被

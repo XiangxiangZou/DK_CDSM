@@ -11,14 +11,14 @@ from pathlib import Path
 
 import numpy as np
 
-from koopman_control.dktv.least_squares import direct_refit
-from koopman_control.dktv.window_update import SlidingWindowKoopmanUpdater
-from koopman_control.dktv.online_model import artifact_fingerprint, run_window_replay
-from experiments.dktv.aggregate_plan_03 import (
+from prediction.dktv.least_squares import direct_refit
+from prediction.dktv.window_update import SlidingWindowKoopmanUpdater
+from prediction.dktv.online_model import artifact_fingerprint, run_window_replay
+from prediction.dktv_window_aggregate import (
     _canonical_status,
     _verify_source_result_files,
 )
-from experiments.dktv.plan_03 import _scenario_stream
+from prediction.dktv_window_prediction import _scenario_stream
 
 from .test_window_update import synthetic
 
@@ -101,7 +101,7 @@ def test_plan03_smoke_cli_contract(tmp_path: Path) -> None:
     environment["MPLBACKEND"] = "Agg"
     environment["MPLCONFIGDIR"] = str(tmp_path / "mpl")
     command = [
-        sys.executable, "-m", "experiments.dktv.plan_03", "--run-type", "smoke",
+        sys.executable, "-m", "prediction.dktv_window_prediction", "--run-type", "smoke",
         "--plan01-run", PLAN01_SMOKE_RUN, "--device", "cpu",
         "--run-id", "pytest_plan03_e2e", "--output-root", str(tmp_path),
     ]

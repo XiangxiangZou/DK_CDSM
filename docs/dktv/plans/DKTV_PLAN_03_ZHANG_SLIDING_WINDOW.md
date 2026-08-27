@@ -70,7 +70,7 @@ manifest 必须保存实际策略，两个策略的结果不能混用。
 增量代码保持最小：
 
 ```text
-src/koopman_control/dktv/
+prediction/dktv/
   window_update.py
   selective_update.py
 

@@ -219,11 +219,11 @@ Linux
 ## 6. 修改文件
 
 ```text
-configs/dktv/plan_03.json
-src/koopman_control/dktv/window_update.py
-src/koopman_control/dktv/online_model.py
-experiments/dktv/plan_03.py
-experiments/dktv/aggregate_plan_03.py
+prediction/dktv_window_config.json
+prediction/dktv/window_update.py
+prediction/dktv/online_model.py
+prediction/dktv_window_prediction.py
+prediction/dktv_window_aggregate.py
 tests/dktv/test_window_update.py
 tests/dktv/test_window_replay.py
 DKTV_PLAN_03_FORMULA_MAPPING.md

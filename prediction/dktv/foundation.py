@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-from koopman_control.dktv.config import stage_bounds
+from .config import stage_bounds
 from prediction.common import (
     fit_state_input_normalizers,
     plot_prediction_errors,

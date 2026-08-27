@@ -49,8 +49,8 @@ Linux
 | 检查 | 结果 |
 | --- | --- |
 | Plan 03 相关文件 `py_compile` | 通过 |
-| `experiments.dktv.plan_03 --help` | 通过 |
-| `experiments.dktv.aggregate_plan_03 --help` | 通过 |
+| `prediction.dktv_window_prediction --help` | 通过 |
+| `prediction.dktv_window_aggregate --help` | 通过 |
 | Plan 03 + Plan 02 回归测试 | `25 passed in 10.19s` |
 | 全仓测试 | `38 passed in 14.83s` |
 | final 聚合少于 10 seed | 按预期拒绝，且未创建输出目录 |
@@ -143,7 +143,7 @@ rollout 结论也与反馈一致：window 在 horizon 10/20 较好，在 horizon
 
 ### P1-01：full run 的 `run.log` 哈希在 manifest 保存后失效
 
-`experiments/dktv/plan_03.py` 先在 `result_files` 中计算 logs 哈希并保存 manifest，
+`prediction/dktv_window_prediction.py` 先在 `result_files` 中计算 logs 哈希并保存 manifest，
 之后又调用 `log(...)` 追加最终状态。结果是 10 个 gatefinal run 的 `run.log` 全部与
 manifest 中记录的 SHA-256 不一致。
 
@@ -158,7 +158,7 @@ manifest 中记录的 SHA-256 不一致。
 
 ### P1-02：aggregate canonical 判定和自身 provenance 不完整
 
-`experiments/dktv/aggregate_plan_03.py` 当前只依据 source runs 的 `canonical` 字段
+`prediction/dktv_window_aggregate.py` 当前只依据 source runs 的 `canonical` 字段
 决定 aggregate 是否 canonical；虽然记录了聚合时 Git 状态，却没有把
 `git.dirty` 纳入判定。同时 aggregate manifest 没有保存
 `aggregate_plan_03.py` 自身及相关统计实现的源码哈希。

@@ -17,14 +17,13 @@ from typing import Any
 import numpy as np
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_ROOT = PROJECT_ROOT / "src"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "outputs"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from koopman_control.dktv.config import stage_bounds  # noqa: E402
-from koopman_control.dktv.online_model import (  # noqa: E402
+from prediction.dktv.config import stage_bounds  # noqa: E402
+from prediction.dktv.online_model import (  # noqa: E402
     artifact_fingerprint,
     evaluate_methods,
     run_accumulative_replay,
@@ -35,19 +34,19 @@ from prediction.common import load_json, save_json  # noqa: E402
 from prediction.dkuc_prediction import DKUCModel  # noqa: E402
 
 
-DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "dktv" / "plan_02.json"
+DEFAULT_CONFIG = PROJECT_ROOT / "prediction" / "dktv_accumulative_config.json"
 PROVENANCE_FILES = (
     "AGENTS.md",
-    "DKTV_PLAN_02_HAO_ACCUMULATIVE.md",
-    "DKTV_PLAN_02_FORMULA_MAPPING.md",
-    "configs/dktv/base.json",
-    "configs/dktv/plan_02.json",
+    "docs/dktv/plans/DKTV_PLAN_02_HAO_ACCUMULATIVE.md",
+    "docs/dktv/formula_mapping/DKTV_PLAN_02_FORMULA_MAPPING.md",
+    "prediction/dktv_base_config.json",
+    "prediction/dktv_accumulative_config.json",
     "prediction/dkuc_prediction.py",
-    "src/koopman_control/dktv/least_squares.py",
-    "src/koopman_control/dktv/accumulative_update.py",
-    "src/koopman_control/dktv/online_model.py",
-    "experiments/dktv/plan_02.py",
-    "tests/test_dktv_accumulative.py",
+    "prediction/dktv/least_squares.py",
+    "prediction/dktv/accumulative_update.py",
+    "prediction/dktv/online_model.py",
+    "prediction/dktv_accumulative_prediction.py",
+    "tests/dktv/test_accumulative.py",
 )
 UPDATE_HISTORY_SCHEMA_VERSION = 2
 
@@ -387,8 +386,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     save_json(
         result_dir / "logs" / "command.json",
         {
-            "entry_module": "experiments.dktv.plan_02",
-            "argv": [sys.executable, "-m", "experiments.dktv.plan_02", *sys.argv[1:]],
+            "entry_module": "prediction.dktv_accumulative_prediction",
+            "argv": [sys.executable, "-m", "prediction.dktv_accumulative_prediction", *sys.argv[1:]],
             "cwd": _portable(Path.cwd(), output_root),
         },
     )
@@ -565,7 +564,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "canonical_blockers": blockers,
         "run_id": run_id,
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "entry_module": "experiments.dktv.plan_02",
+        "entry_module": "prediction.dktv_accumulative_prediction",
         "arguments": {
             "config": _portable(config_path, output_root),
             "run_type": args.run_type,

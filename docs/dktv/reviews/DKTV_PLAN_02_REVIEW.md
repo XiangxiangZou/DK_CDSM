@@ -37,7 +37,7 @@ canonical 数值对比。
 本次检查了：
 
 - Plan 02 计划、执行报告和公式—数组映射；
-- `configs/dktv/plan_02.json`；
+- `prediction/dktv_accumulative_config.json`；
 - `least_squares.py`、`accumulative_update.py`、`online_model.py`；
 - Plan 02 单次运行入口和多 seed 汇总入口；
 - Plan 01 seed override 改动；

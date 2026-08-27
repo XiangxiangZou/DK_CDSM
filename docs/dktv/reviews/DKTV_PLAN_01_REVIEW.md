@@ -26,10 +26,10 @@ Plan 01 的核心实验链路已经形成：公共配置、时变数据采集、
 本次检查了：
 
 - Plan 01 计划与执行报告；
-- `configs/dktv/base.json`；
+- `prediction/dktv_base_config.json`；
 - `traj_data/mujoco_cdsm.py` 与 `prediction/dkuc_prediction.py` 的改动；
-- `src/cdsm/dktv_data.py`、`src/koopman_control/dktv/`；
-- `experiments/dktv/plan_01.py` 与 `tests/test_dktv_foundation.py`；
+- `traj_data/dktv_data.py`、`prediction/dktv/`；
+- `prediction/dktv_foundation_prediction.py` 与 `tests/dktv/test_foundation.py`；
 - smoke/full 的 manifest、metrics、模型 metadata、文件清单和代表性 PNG；
 - 当前 Git 状态、忽略规则和文本差异检查。
 
@@ -141,7 +141,7 @@ Plan 01，则从 Plan 01 变更中分离。执行报告应列出所有任务相�
 - `experiments/dktv/__init__.py`；
 - `src/cdsm/__init__.py`；
 - `src/koopman_control/__init__.py`；
-- `src/koopman_control/dktv/__init__.py`。
+- `prediction/dktv/__init__.py`。
 
 这不是运行错误，但报告中的“所有文本检查通过”目前不准确。建议修正空行，并在
 未提交阶段使用 `git diff --no-index --check /dev/null <file>` 或等价方式覆盖新文件。

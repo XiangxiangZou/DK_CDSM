@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from koopman_control.dktv.config import stage_bounds
+from prediction.dktv.config import stage_bounds
 from traj_data.mujoco_cdsm import CABLE_NAMES, MujocoCDSM
 from traj_data.references import (
     random_joint_reference,

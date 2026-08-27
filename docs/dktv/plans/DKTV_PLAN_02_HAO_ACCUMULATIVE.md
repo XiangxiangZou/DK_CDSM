@@ -61,7 +61,7 @@ online update、`direct_refit` oracle 和 fixed DKO 必须加载同一份冻结 
 核心实现应集中在最小模块中，例如：
 
 ```text
-src/koopman_control/dktv/
+prediction/dktv/
   least_squares.py
   accumulative_update.py
   online_model.py

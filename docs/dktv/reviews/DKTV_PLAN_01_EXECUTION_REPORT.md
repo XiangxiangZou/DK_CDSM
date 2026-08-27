@@ -9,7 +9,7 @@
 ## 1. 执行结论
 
 Plan 01 规定的公共配置、时变数据、唯一初始模型、统一评价和输出契约均已实现。
-smoke 与 full-run 均由同一个 `configs/dktv/base.json` 驱动并得到
+smoke 与 full-run 均由同一个 `prediction/dktv_base_config.json` 驱动并得到
 `status=accepted`。full-run 中 fixed DKO 的 20 步阶段 rollout RMSE 从 nominal
 阶段的 `0.0159488` 增至 time-varying 阶段的 `0.0566936`，退化比为
 `3.55473`，超过配置要求的 `1.1`。
@@ -21,8 +21,8 @@ smoke 与 full-run 均由同一个 `configs/dktv/base.json` 驱动并得到
 
 | 计划步骤 | 实施结果 | 核查证据 |
 | --- | --- | --- |
-| 复用采集与 DKUC 入口 | 复用 `traj_data` 的 MuJoCo plant、张力分配和参考生成；复用 `prediction` 的 DKUC 训练、加载和绘图 | `src/cdsm/dktv_data.py`、`src/koopman_control/dktv/foundation.py` |
-| 公共配置与校验 | 冻结四个方法名、状态/输入、16 维 affine lift、固定 encoder、ridge、seed、扰动、质量与评价参数 | `configs/dktv/base.json`、`src/koopman_control/dktv/config.py` |
+| 复用采集与 DKUC 入口 | 复用 `traj_data` 的 MuJoCo plant、张力分配和参考生成；复用 `prediction` 的 DKUC 训练、加载和绘图 | `traj_data/dktv_data.py`、`prediction/dktv/foundation.py` |
+| 公共配置与校验 | 冻结四个方法名、状态/输入、16 维 affine lift、固定 encoder、ridge、seed、扰动、质量与评价参数 | `prediction/dktv_base_config.json`、`prediction/dktv/config.py` |
 | 正弦扰动与数据字段 | MuJoCo 主动关节通过 `qfrc_applied` 接收正弦外扰；保存计划要求的 11 个字段和 4 个旧接口兼容别名 | full raw `dataset.npz` |
 | 时变性与质量检查 | 实现相同 x/u 不同绝对时刻测试；检查有限值、限位、饱和、张力异常、残差和范围 | `metrics/time_variation.json`、`metrics/data_quality.json` |
 | smoke 后 full-run | smoke 和 full 均通过同一入口、配置和 seed 运行 | 下文产物路径 |
@@ -32,7 +32,7 @@ smoke 与 full-run 均由同一个 `configs/dktv/base.json` 驱动并得到
 
 ## 3. 代码与配置变更
 
-- `configs/dktv/base.json`
+- `prediction/dktv_base_config.json`
   - 唯一公共基础配置；seed 为 `20260825`。
   - lift 为 `[x, phi(x), 1]`，总维数 16，其中 encoder 输出 11 维。
 - `traj_data/mujoco_cdsm.py`
@@ -40,15 +40,15 @@ smoke 与 full-run 均由同一个 `configs/dktv/base.json` 驱动并得到
   - `set_state` 同时复位绝对仿真时间和外力，保证时变性对照公平。
 - `prediction/dkuc_prediction.py`
   - 增加默认关闭的常数 observable；旧 artifact 行为保持不变。
-- `src/cdsm/dktv_data.py`
+- `traj_data/dktv_data.py`
   - 时变受控采集、字段契约、质量验收、确定性拆分和时变性证明。
-- `src/koopman_control/dktv/config.py`
+- `prediction/dktv/config.py`
   - 公共配置和阶段边界校验。
-- `src/koopman_control/dktv/foundation.py`
+- `prediction/dktv/foundation.py`
   - 固定 encoder 后的 ridge `A0/B0` 重估、artifact 冻结和统一评价。
-- `experiments/dktv/plan_01.py`
+- `prediction/dktv_foundation_prediction.py`
   - smoke/full 端到端模块入口与可复现 manifest。
-- `tests/test_dktv_foundation.py`
+- `tests/dktv/test_foundation.py`
   - 7 个配置、数据、affine lift 和真实 MuJoCo 时变性测试。
 
 ## 4. 执行命令
@@ -60,12 +60,12 @@ smoke 与 full-run 均由同一个 `configs/dktv/base.json` 驱动并得到
 env -u PYTHONPATH PYTHONNOUSERSITE=1 MUJOCO_GL=egl \
   MPLBACKEND=Agg MPLCONFIGDIR=/tmp/dktv_plan01_matplotlib \
   /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
-  -m experiments.dktv.plan_01 --run-type smoke --device cpu --tag acceptance
+  -m prediction.dktv_foundation_prediction --run-type smoke --device cpu --tag acceptance
 
 env -u PYTHONPATH PYTHONNOUSERSITE=1 MUJOCO_GL=egl \
   MPLBACKEND=Agg MPLCONFIGDIR=/tmp/dktv_plan01_matplotlib \
   /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
-  -m experiments.dktv.plan_01 --run-type full --device cpu --tag baseline
+  -m prediction.dktv_foundation_prediction --run-type full --device cpu --tag baseline
 
 env -u PYTHONPATH PYTHONNOUSERSITE=1 MUJOCO_GL=egl \
   MPLBACKEND=Agg MPLCONFIGDIR=/tmp/dktv_plan01_matplotlib \

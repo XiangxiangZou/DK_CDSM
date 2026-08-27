@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from koopman_control.dktv.least_squares import direct_refit
-from koopman_control.dktv.selective_update import SelectiveWindowKoopmanUpdater
-from koopman_control.dktv.window_update import SlidingWindowKoopmanUpdater
+from prediction.dktv.least_squares import direct_refit
+from prediction.dktv.selective_update import SelectiveWindowKoopmanUpdater
+from prediction.dktv.window_update import SlidingWindowKoopmanUpdater
 
 from .test_window_update import synthetic
 

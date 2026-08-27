@@ -44,7 +44,7 @@ SDP-MPC、载荷/绳索退化等多场景扩展，以及旧代码批量迁移。
 
 ## 4. 公共基础配置
 
-第一版只维护一份 `configs/dktv/base.json`，建议默认值为：
+第一版只维护一份 `prediction/dktv_base_config.json`，建议默认值为：
 
 ```text
 state:                 [qa, qb, dqa, dqb]

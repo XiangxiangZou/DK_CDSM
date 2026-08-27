@@ -142,18 +142,18 @@ manifest 和本报告均只把退化比称为单一配置 stream 的“工程门
 
 ### 本轮实现与契约修正
 
-- `configs/dktv/base.json`
-- `src/cdsm/dktv_data.py`
-- `src/koopman_control/dktv/config.py`
-- `src/koopman_control/dktv/foundation.py`
-- `experiments/dktv/plan_01.py`
-- `tests/test_dktv_foundation.py`
+- `prediction/dktv_base_config.json`
+- `traj_data/dktv_data.py`
+- `prediction/dktv/config.py`
+- `prediction/dktv/foundation.py`
+- `prediction/dktv_foundation_prediction.py`
+- `tests/dktv/test_foundation.py`
 - `DKTV_PLAN_02_HAO_ACCUMULATIVE.md`
 - `experiments/__init__.py`
 - `experiments/dktv/__init__.py`
 - `src/cdsm/__init__.py`
 - `src/koopman_control/__init__.py`
-- `src/koopman_control/dktv/__init__.py`
+- `prediction/dktv/__init__.py`
 - `DKTV_PLAN_01_REVIEW_FEEDBACK.md`（本报告）
 
 ### 上一轮 Plan 01 已实现、当前仍在工作树中的文件
@@ -182,12 +182,12 @@ manifest 和本报告均只把退化比称为单一配置 stream 的“工程门
 
 ```bash
 env -u PYTHONPATH /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
-  -m experiments.dktv.plan_01 --run-type smoke --device cpu \
+  -m prediction.dktv_foundation_prediction --run-type smoke --device cpu \
   --tag baseline_reviewed
 
 env -u PYTHONPATH MPLCONFIGDIR=/tmp/dktv-matplotlib \
   /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
-  -m experiments.dktv.plan_01 --run-type full --device cpu \
+  -m prediction.dktv_foundation_prediction --run-type full --device cpu \
   --tag baseline_reviewed
 
 env -u PYTHONPATH /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \

@@ -16,15 +16,14 @@ from typing import Any
 import numpy as np
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_ROOT = PROJECT_ROOT / "src"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "outputs"
-DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "dktv" / "plan_03.json"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+DEFAULT_CONFIG = PROJECT_ROOT / "prediction" / "dktv_window_config.json"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from cdsm.dktv_data import assess_data_quality, collect_time_varying_pd  # noqa: E402
-from experiments.dktv.plan_02 import (  # noqa: E402
+from traj_data.dktv_data import assess_data_quality, collect_time_varying_pd  # noqa: E402
+from prediction.dktv_accumulative_prediction import (  # noqa: E402
     _device,
     _file_record,
     _git_provenance,
@@ -34,8 +33,8 @@ from experiments.dktv.plan_02 import (  # noqa: E402
     _source_scenario_contract,
     _tree_records,
 )
-from koopman_control.dktv.config import stage_bounds  # noqa: E402
-from koopman_control.dktv.online_model import (  # noqa: E402
+from prediction.dktv.config import stage_bounds  # noqa: E402
+from prediction.dktv.online_model import (  # noqa: E402
     artifact_fingerprint,
     evaluate_methods,
     normalized_pairs,
@@ -44,24 +43,24 @@ from koopman_control.dktv.online_model import (  # noqa: E402
     update_summary,
     window_update_summary,
 )
-from koopman_control.dktv.window_update import latent_rmse  # noqa: E402
+from prediction.dktv.window_update import latent_rmse  # noqa: E402
 from prediction.common import load_json, save_json  # noqa: E402
 from prediction.dkuc_prediction import DKUCModel  # noqa: E402
 
 
 PROVENANCE_FILES = (
     "AGENTS.md",
-    "DKTV_PLAN_03_ZHANG_SLIDING_WINDOW.md",
-    "DKTV_PLAN_03_FORMULA_MAPPING.md",
-    "configs/dktv/base.json",
-    "configs/dktv/plan_02.json",
-    "configs/dktv/plan_03.json",
-    "src/koopman_control/dktv/least_squares.py",
-    "src/koopman_control/dktv/accumulative_update.py",
-    "src/koopman_control/dktv/window_update.py",
-    "src/koopman_control/dktv/selective_update.py",
-    "src/koopman_control/dktv/online_model.py",
-    "experiments/dktv/plan_03.py",
+    "docs/dktv/plans/DKTV_PLAN_03_ZHANG_SLIDING_WINDOW.md",
+    "docs/dktv/formula_mapping/DKTV_PLAN_03_FORMULA_MAPPING.md",
+    "prediction/dktv_base_config.json",
+    "prediction/dktv_accumulative_config.json",
+    "prediction/dktv_window_config.json",
+    "prediction/dktv/least_squares.py",
+    "prediction/dktv/accumulative_update.py",
+    "prediction/dktv/window_update.py",
+    "prediction/dktv/selective_update.py",
+    "prediction/dktv/online_model.py",
+    "prediction/dktv_window_prediction.py",
     "tests/dktv/test_window_update.py",
     "tests/dktv/test_selective_update.py",
     "tests/dktv/test_window_replay.py",
@@ -527,8 +526,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         (result_dir / name).mkdir(parents=True, exist_ok=False)
     save_json(result_dir / "config_snapshot.json", config)
     save_json(result_dir / "logs" / "command.json", {
-        "entry_module": "experiments.dktv.plan_03",
-        "argv": [sys.executable, "-m", "experiments.dktv.plan_03", *sys.argv[1:]],
+        "entry_module": "prediction.dktv_window_prediction",
+        "argv": [sys.executable, "-m", "prediction.dktv_window_prediction", *sys.argv[1:]],
         "cwd": _portable(Path.cwd(), output_root),
     })
     save_json(result_dir / "logs" / "environment.json", {
@@ -730,7 +729,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "canonical_blockers": blockers,
         "run_id": run_id,
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "entry_module": "experiments.dktv.plan_03",
+        "entry_module": "prediction.dktv_window_prediction",
         "arguments": {
             "config": _portable(config_path, output_root), "run_type": args.run_type,
             "plan01_run": args.plan01_run, "device_requested": args.device,

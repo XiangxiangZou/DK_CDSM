@@ -68,31 +68,34 @@ working-tree changes as user-owned unless proven otherwise.
 
 ## 3. Repository Ownership
 
-Use the following boundaries:
+Use the repository's five-directory research workflow boundaries:
 
 ```text
-src/            Reusable implementation code
-experiments/    CLI entry points and experiment composition
-configs/        Stable, reviewable defaults
-tests/          Automated unit and integration tests
-assets/         Required XML models and static project resources
-archive/        Historical programs retained for reproducibility
-outputs/        Generated local artifacts; never application source
+traj_data/       Independently runnable data-collection programs
+prediction/      Independently runnable prediction/model-identification methods
+control/         Independently runnable control methods
+visualization/   Independently runnable plotting and rendering programs
+common/          Shared runtime utilities and required static resources
+tests/           Automated unit and integration tests
+docs/            Plans, formula mappings, execution reports, and reviews
+legacy_system/   Historical programs retained for reproducibility
+outputs/         Generated local artifacts; never application source
 ```
 
 More specifically:
 
-- `src/koopman_control/` owns reusable learning, model, evaluation, and
-  control algorithms.
-- `src/cable_robotics/` owns generic cable allocation, safety, interfaces,
-  and metrics.
-- `src/cdsm/` owns CDSM-specific MuJoCo plants, kinematics, references,
-  collection, and runtime behavior.
-- `experiments/` may select parameters and compose workflows, but reusable
-  algorithms must not be implemented there.
-- `archive/` is compatibility and historical evidence. Do not build new
-  reusable features there unless an existing archived workflow must be
-  repaired.
+- `prediction/` owns prediction models, online identification algorithms,
+  their stable configuration files, and their runnable entry points.
+- `control/` owns LQR, MPC, KILC, and future stability-guaranteed DKTV
+  control entry points.
+- `traj_data/` owns CDSM collection programs and data-generation helpers.
+- `common/` owns code shared by more than one main workflow, including cable
+  allocation, artifact adapters, metrics, references, and static XML assets.
+- `visualization/` owns result plotting, report figures, and MuJoCo rendering.
+- `legacy_system/` is compatibility and historical evidence. Do not build new
+  reusable features there unless an existing archived workflow must be repaired.
+- Keep method-specific helpers close to their independently runnable method;
+  do not introduce a second parallel `src/`/`experiments/` hierarchy.
 
 ## 4. Standard Execution Workflow
 

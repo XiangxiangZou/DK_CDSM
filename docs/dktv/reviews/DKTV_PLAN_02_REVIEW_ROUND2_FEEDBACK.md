@@ -22,7 +22,7 @@ Round 2 审核确认上一轮 P0-02、P1 和 P2 代码/审计问题均已关闭�
 
 ## 2. 显式恢复回归断言
 
-`tests/test_dktv_accumulative.py` 现在直接断言：
+`tests/dktv/test_accumulative.py` 现在直接断言：
 
 ```text
 rejected attempts:                 [6, 7]
@@ -39,7 +39,7 @@ rejected sample count:              4
 
 ## 3. Paired statistics 图
 
-`experiments/dktv/aggregate_plan_02.py` 新增：
+`prediction/dktv_accumulative_aggregate.py` 新增：
 
 ```text
 figures/paired_one_step_difference_ci.png

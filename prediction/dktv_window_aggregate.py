@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 from scipy.stats import t as student_t
 
-from experiments.dktv.aggregate_plan_02 import (
+from prediction.dktv_accumulative_aggregate import (
     _all_numeric_metrics_finite,
     _git_provenance,
     _record,
@@ -21,15 +21,15 @@ from experiments.dktv.aggregate_plan_02 import (
 )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "outputs"
 PROVENANCE_FILES = (
     "AGENTS.md",
-    "configs/dktv/plan_03.json",
-    "experiments/dktv/aggregate_plan_02.py",
-    "experiments/dktv/aggregate_plan_03.py",
-    "experiments/dktv/plan_03.py",
-    "src/koopman_control/dktv/online_model.py",
+    "prediction/dktv_window_config.json",
+    "prediction/dktv_accumulative_aggregate.py",
+    "prediction/dktv_window_aggregate.py",
+    "prediction/dktv_window_prediction.py",
+    "prediction/dktv/online_model.py",
 )
 
 
@@ -418,7 +418,7 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "canonical_blockers": blockers,
         "run_id": run_id,
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "entry_module": "experiments.dktv.aggregate_plan_03",
+        "entry_module": "prediction.dktv_window_aggregate",
         "profile": args.profile,
         "git": aggregate_git,
         "source_files": _aggregate_source_provenance(),

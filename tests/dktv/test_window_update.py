@@ -5,12 +5,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from koopman_control.dktv.least_squares import (
+from prediction.dktv.least_squares import (
     build_regressor,
     direct_refit,
     sufficient_statistics,
 )
-from koopman_control.dktv.window_update import SlidingWindowKoopmanUpdater
+from prediction.dktv.window_update import SlidingWindowKoopmanUpdater
 
 
 def synthetic(seed: int = 17, samples: int = 180):

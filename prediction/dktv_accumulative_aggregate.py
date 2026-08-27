@@ -16,7 +16,7 @@ import numpy as np
 from scipy.stats import t as student_t
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "outputs"
 AGGREGATE_MANIFEST_SCHEMA_VERSION = 2
 
@@ -446,8 +446,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     plt.close(figure)
 
     command = {
-        "entry_module": "experiments.dktv.aggregate_plan_02",
-        "argv": [sys.executable, "-m", "experiments.dktv.aggregate_plan_02", *sys.argv[1:]],
+        "entry_module": "prediction.dktv_accumulative_aggregate",
+        "argv": [sys.executable, "-m", "prediction.dktv_accumulative_aggregate", *sys.argv[1:]],
     }
     command_path = result_dir / "logs" / "command.json"
     command_path.write_text(json.dumps(command, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

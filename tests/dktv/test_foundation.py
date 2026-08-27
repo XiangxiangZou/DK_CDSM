@@ -12,26 +12,26 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from cdsm.dktv_data import (
+from traj_data.dktv_data import (
     REQUIRED_DATA_FIELDS,
     assess_data_quality,
     prove_time_variation,
     sine_disturbance,
     split_nominal_training_stream,
 )
-from koopman_control.dktv.config import (
+from prediction.dktv.config import (
     EXPECTED_METHODS,
     load_foundation_config,
     stage_bounds,
     validate_foundation_config,
 )
-from koopman_control.dktv.foundation import coordinate_contract_check
+from prediction.dktv.foundation import coordinate_contract_check
 from prediction.common import Normalizer
 from prediction.dkuc_prediction import DKUCConfig, DKUCModel, make_network_class
 
 
-ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATH = ROOT / "configs" / "dktv" / "base.json"
+ROOT = Path(__file__).resolve().parents[2]
+CONFIG_PATH = ROOT / "prediction" / "dktv_base_config.json"
 XML_PATH = ROOT / "traj_data" / "assets" / "multi_joint_cable_driven_space_robot.xml"
 
 
@@ -221,7 +221,7 @@ def test_plan_01_smoke_cli_end_to_end(tmp_path: Path) -> None:
     command = [
         sys.executable,
         "-m",
-        "experiments.dktv.plan_01",
+        "prediction.dktv_foundation_prediction",
         "--run-type",
         "smoke",
         "--device",

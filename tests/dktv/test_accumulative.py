@@ -12,22 +12,22 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from koopman_control.dktv.accumulative_update import AccumulativeKoopmanUpdater
-from koopman_control.dktv.least_squares import (
+from prediction.dktv.accumulative_update import AccumulativeKoopmanUpdater
+from prediction.dktv.least_squares import (
     build_regressor,
     direct_refit,
     solve_statistics,
     sufficient_statistics,
 )
-from koopman_control.dktv.online_model import (
+from prediction.dktv.online_model import (
     artifact_fingerprint,
     run_accumulative_replay,
     update_summary,
 )
-from experiments.dktv.aggregate_plan_02 import _comparison_contract, _paired_summary
+from prediction.dktv_accumulative_aggregate import _comparison_contract, _paired_summary
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PLAN01_SMOKE_RUN = "20260825_145551_plan01_smoke_baseline_reviewed"
 
 
@@ -317,7 +317,7 @@ def test_plan_02_smoke_cli_end_to_end(tmp_path: Path) -> None:
     command = [
         sys.executable,
         "-m",
-        "experiments.dktv.plan_02",
+        "prediction.dktv_accumulative_prediction",
         "--run-type",
         "smoke",
         "--plan01-run",

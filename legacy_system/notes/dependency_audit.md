@@ -82,14 +82,13 @@ D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe
 & 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' .\prediction\dkac_prediction.py --help
 & 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' .\control\mpc_control.py --help
 & 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' .\visualization\entrypoints\render_animation.py --help
-powershell.exe -NoProfile -Command "[void][scriptblock]::Create((Get-Content -LiteralPath '.\run_interactive_fullflow.ps1' -Raw)); Write-Host 'PowerShell syntax OK'"
 ```
 
 同时 `git diff --check` 通过。
 
 ## 未完成项
 
-本次未跑完整 smoke/full 流程，只做了入口级检查。后续正式提交归档前，建议至少用 `run_interactive_fullflow.bat` 跑一次 `smoke_test`，验证：
+本次未跑完整 smoke/full 流程，只做了入口级检查。后续正式提交归档前，建议按独立阶段入口运行一次 `smoke_test`，验证：
 
 ```text
 数据采集 -> 预测训练 -> 控制 -> 可视化

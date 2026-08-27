@@ -27,8 +27,6 @@
 | `others/` | 当前实用小工具和诊断脚本。 |
 | `outputs/` | 历史和本地生成结果，仍由 `.gitignore` 忽略。 |
 | `FIVE_FOLDER_RUN_GUIDE.md` | 当前五目录运行指南。 |
-| `run_interactive_fullflow.bat` | 当前半自动 Windows 启动入口。 |
-| `run_interactive_fullflow.ps1` | 当前半自动 PowerShell 编排脚本。 |
 | `AGENTS.md` | 当前仓库工作规则。 |
 | `requirements.txt`、`pyproject.toml`、`.gitignore` | 当前环境/项目元数据。 |
 

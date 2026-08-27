@@ -35,7 +35,7 @@ legacy_system/notes/remark.md
 ## 使用原则
 
 - 新实验不从 `legacy_system/` 启动。
-- 新流程入口见根目录 `FIVE_FOLDER_RUN_GUIDE.md` 和 `run_interactive_fullflow.bat`。
+- 新流程的独立阶段入口和运行方式见根目录 `FIVE_FOLDER_RUN_GUIDE.md`。
 - 如果新系统运行异常，可以到 `legacy_system/source_tree/` 对照旧实现。
 - 如果需要恢复旧实验，先检查旧脚本中的相对路径；它们现在位于 `legacy_system/source_tree/` 下，直接运行可能需要临时调整工作目录或路径。
 - 不要在 `legacy_system/` 里继续开发新功能；需要保留的新能力应整理到 `traj_data/`、`prediction/`、`control/`、`common/`、`visualization/` 或 `others/`。

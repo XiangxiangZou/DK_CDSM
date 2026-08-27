@@ -62,51 +62,6 @@ traj_data 采集数据
 
 注意：控制阶段需要的是“模型目录”，例如 DKAC 需要 `best_dkac.pt`、`normalizers.json`、`model_config.json` 等一整套文件。不要只拷贝一个 `best_dkac.pt`。
 
-## 1.1 半自动交互式脚本
-
-根目录提供了两个半自动运行脚本：
-
-| 文件 | 作用 |
-| --- | --- |
-| `run_interactive_fullflow.bat` | Windows 双击/右键运行入口，会自动调用 PowerShell 脚本。 |
-| `run_interactive_fullflow.ps1` | 实际菜单逻辑，负责询问采集方法、预测模型、控制器、末端轨迹，并按顺序运行各阶段。 |
-
-推荐普通使用方式：
-
-```text
-右键/双击 run_interactive_fullflow.bat
-```
-
-脚本会依次询问：
-
-1. 运行规模：`full_run` 或 `smoke_test`。
-2. 数据采集方法：`controlled`、`uncontrolled random`、`uncontrolled passive`。
-3. 预测方法：`dkac`、`dkuc`、`edmd`、`dkn`。
-4. 控制器：`mpc`、`lqr`、`kilc`、`none`。
-5. 末端轨迹或参考类型：
-   - `mpc`: `star` 或 `circle`。
-   - `lqr`: `circle` 或 `joint`。
-   - `kilc`: 当前固定为 `circle`。
-6. 是否渲染 MuJoCo GIF。
-
-脚本内置以下兼容限制：
-
-- `MPC` 当前只接受 `DKAC` artifact；如果选择了其他预测模型再选 `MPC`，脚本会自动改为训练 `DKAC`。
-- `LQR` 支持 `EDMD`、`DKUC`、`DKAC`。
-- `DKN` 当前只作为 prediction-only；如果选择 `DKN` 后又选择控制器，脚本会自动跳过控制阶段。
-- `KILC` 需要已有 continuous-DKUC artifact，不直接使用普通 `dkuc_prediction.py` 的训练输出；脚本会要求手工输入该 artifact 目录。
-
-脚本仍然会把每一步实际执行的命令打印到终端，并在最后汇总：
-
-```text
-Dataset
-Prediction artifact
-Control result
-Media output
-```
-
-如果需要完全可复现的论文实验，建议运行结束后把终端中打印的这些路径和对应 `manifest.json/metrics.json` 一起记录下来。
-
 ## 2. `traj_data/`：数据采集
 
 ### 可直接运行的入口脚本

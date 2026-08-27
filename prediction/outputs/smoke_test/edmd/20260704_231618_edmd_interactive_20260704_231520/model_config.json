@@ -1,9 +1,0 @@
-{
-  "model": "EDMD",
-  "config": {
-    "n_centers": 200,
-    "rbf_sigma": null,
-    "ridge": 0.0001,
-    "kmeans_seed": 2007
-  }
-}

@@ -26,12 +26,6 @@
 FIVE_FOLDER_RUN_GUIDE.md
 ```
 
-半自动运行：
-
-```text
-run_interactive_fullflow.bat
-```
-
 手工全流程：
 
 ```text

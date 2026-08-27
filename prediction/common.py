@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import random
 from dataclasses import dataclass
 from datetime import datetime
@@ -145,6 +146,242 @@ class Normalizer:
             还原到原始尺度的数据。
         """
         return np.asarray(values_norm, dtype=np.float64) * self.std + self.mean
+
+
+# ---------------------------------------------------------------------------
+# Fixed-encoder online Koopman utilities
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MatrixDiagnostics:
+    sample_count: int
+    regressor_dim: int
+    rank: int
+    minimum_singular_value: float
+    condition_number: float
+    regularized_condition_number: float
+    spectral_radius_A: float
+    finite: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return jsonable(self.__dict__)
+
+
+@dataclass(frozen=True)
+class LeastSquaresResult:
+    A: np.ndarray
+    B: np.ndarray
+    theta: np.ndarray
+    diagnostics: MatrixDiagnostics
+
+
+def build_regressor(z_current: np.ndarray, u_normalized: np.ndarray) -> np.ndarray:
+    """Build aligned row samples ``[z_k, u_k]`` for Koopman regression."""
+    z = np.asarray(z_current, dtype=np.float64)
+    u = np.asarray(u_normalized, dtype=np.float64)
+    if z.ndim != 2 or u.ndim != 2 or z.shape[0] != u.shape[0]:
+        raise ValueError("z_current and u_normalized must be aligned 2-D arrays")
+    if z.shape[0] == 0:
+        raise ValueError("at least one snapshot is required")
+    if not np.all(np.isfinite(z)) or not np.all(np.isfinite(u)):
+        raise ValueError("regressor inputs must be finite")
+    return np.concatenate([z, u], axis=1)
+
+
+def sufficient_statistics(
+    regressor: np.ndarray,
+    z_next: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return additive Gram and cross statistics without retaining samples."""
+    values = np.asarray(regressor, dtype=np.float64)
+    target = np.asarray(z_next, dtype=np.float64)
+    if values.ndim != 2 or target.ndim != 2 or values.shape[0] != target.shape[0]:
+        raise ValueError("regressor and z_next must be aligned 2-D arrays")
+    if values.shape[0] == 0:
+        raise ValueError("at least one snapshot is required")
+    if not np.all(np.isfinite(values)) or not np.all(np.isfinite(target)):
+        raise ValueError("least-squares samples must be finite")
+    return values.T @ values, values.T @ target
+
+
+def solve_statistics(
+    gram: np.ndarray,
+    cross: np.ndarray,
+    *,
+    sample_count: int,
+    latent_dim: int,
+    input_dim: int,
+    ridge_lambda: float,
+    affine_constant: bool,
+    singular_values: np.ndarray | None = None,
+) -> LeastSquaresResult:
+    """Solve a regularized Koopman ``A/B`` model from sufficient statistics."""
+    gram_values = np.asarray(gram, dtype=np.float64)
+    cross_values = np.asarray(cross, dtype=np.float64)
+    regressor_dim = int(latent_dim) + int(input_dim)
+    if gram_values.shape != (regressor_dim, regressor_dim):
+        raise ValueError("gram has an incompatible shape")
+    if cross_values.shape != (regressor_dim, int(latent_dim)):
+        raise ValueError("cross has an incompatible shape")
+    if int(sample_count) <= 0 or float(ridge_lambda) <= 0.0:
+        raise ValueError("sample_count and ridge_lambda must be positive")
+    if not np.all(np.isfinite(gram_values)) or not np.all(np.isfinite(cross_values)):
+        raise ValueError("sufficient statistics must be finite")
+
+    regularized = gram_values + float(ridge_lambda) * np.eye(regressor_dim)
+    theta = np.linalg.solve(regularized, cross_values)
+    A = theta[:latent_dim].T.copy()
+    B = theta[latent_dim:].T.copy()
+    if affine_constant:
+        A[-1] = 0.0
+        A[-1, -1] = 1.0
+        B[-1] = 0.0
+        theta = np.concatenate([A, B], axis=1).T
+
+    if singular_values is None:
+        eigenvalues = np.linalg.eigvalsh(0.5 * (gram_values + gram_values.T))
+        singular = np.sqrt(np.clip(eigenvalues, 0.0, None))[::-1]
+    else:
+        singular = np.asarray(singular_values, dtype=np.float64)
+    maximum = float(singular[0]) if singular.size else 0.0
+    minimum = float(singular[-1]) if singular.size else 0.0
+    tolerance = np.finfo(np.float64).eps * max(regressor_dim, int(sample_count)) * maximum
+    rank = int(np.count_nonzero(singular > tolerance))
+    condition = (
+        float(maximum / minimum)
+        if rank == regressor_dim and minimum > 0.0
+        else float("inf")
+    )
+    diagnostics = MatrixDiagnostics(
+        sample_count=int(sample_count),
+        regressor_dim=regressor_dim,
+        rank=rank,
+        minimum_singular_value=minimum,
+        condition_number=condition,
+        regularized_condition_number=float(np.linalg.cond(regularized)),
+        spectral_radius_A=float(np.max(np.abs(np.linalg.eigvals(A)))),
+        finite=bool(np.all(np.isfinite(A)) and np.all(np.isfinite(B))),
+    )
+    return LeastSquaresResult(A=A, B=B, theta=theta, diagnostics=diagnostics)
+
+
+def direct_refit(
+    z_current: np.ndarray,
+    z_next: np.ndarray,
+    u_normalized: np.ndarray,
+    *,
+    ridge_lambda: float,
+    affine_constant: bool = True,
+) -> LeastSquaresResult:
+    """Fit Koopman ``A/B`` directly from supplied fixed-encoder snapshots."""
+    z = np.asarray(z_current, dtype=np.float64)
+    target = np.asarray(z_next, dtype=np.float64)
+    u = np.asarray(u_normalized, dtype=np.float64)
+    regressor = build_regressor(z, u)
+    if target.shape != z.shape or not np.all(np.isfinite(target)):
+        raise ValueError("z_next must be finite and match z_current")
+    gram, cross = sufficient_statistics(regressor, target)
+    return solve_statistics(
+        gram,
+        cross,
+        sample_count=regressor.shape[0],
+        latent_dim=z.shape[1],
+        input_dim=u.shape[1],
+        ridge_lambda=ridge_lambda,
+        affine_constant=affine_constant,
+        singular_values=np.linalg.svd(regressor, compute_uv=False),
+    )
+
+
+def dkuc_artifact_fingerprint(artifact_dir: str | Path) -> str:
+    """Fingerprint the frozen DKUC weights, normalizers, and architecture."""
+    root = Path(artifact_dir)
+    digest = hashlib.sha256()
+    for name in ("best_dkuc.pt", "normalizers.json", "model_config.json"):
+        path = root / name
+        if not path.is_file():
+            raise FileNotFoundError(f"DKUC artifact is missing required file: {path}")
+        digest.update(name.encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def lift_dkuc_transitions(
+    model: Any,
+    dataset: dict[str, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Lift a complete dataset with a frozen ``DKUCModel`` encoder."""
+    validate_dataset(dataset)
+    states = np.asarray(dataset["states"], dtype=np.float64)
+    inputs = np.asarray(dataset["inputs"], dtype=np.float64)
+    flat = states.reshape(-1, model.state_dim)
+    normalized = model.x_normer.transform(flat).astype(np.float32)
+    with model._torch.no_grad():
+        lifted = model.model.lift(model._torch.from_numpy(normalized).to(model.device))
+    z = lifted.cpu().numpy().astype(np.float64).reshape(*states.shape[:2], -1)
+    u = model.u_normer.transform(inputs.reshape(-1, model.control_dim)).reshape(inputs.shape)
+    return z[:, :-1], z[:, 1:], u
+
+
+def recover_dkuc_batch(model: Any, latent: np.ndarray) -> np.ndarray:
+    """Recover a batch of physical states from DKUC latent coordinates."""
+    normalized = np.asarray(latent, dtype=np.float64)[..., : model.state_dim]
+    shape = normalized.shape
+    return model.x_normer.inverse(normalized.reshape(-1, model.state_dim)).reshape(shape)
+
+
+def predict_dkuc_latent_batch(
+    model: Any,
+    A: np.ndarray,
+    B: np.ndarray,
+    z_current: np.ndarray,
+    u_normalized: np.ndarray,
+) -> np.ndarray:
+    """Apply one latent linear step and return physical-state predictions."""
+    latent_next = np.asarray(z_current) @ np.asarray(A).T + np.asarray(u_normalized) @ np.asarray(B).T
+    return recover_dkuc_batch(model, latent_next)
+
+
+def snapshot_rollout_predictions(
+    model: Any,
+    dataset: dict[str, np.ndarray],
+    A_by_step: np.ndarray,
+    B_by_step: np.ndarray,
+    *,
+    horizon: int,
+    stride: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Evaluate rollouts with the causal model snapshot available at each start."""
+    validate_dataset(dataset)
+    states = np.asarray(dataset["states"], dtype=np.float64)
+    inputs = np.asarray(dataset["inputs"], dtype=np.float64)
+    steps = inputs.shape[1]
+    if int(horizon) <= 0 or int(horizon) > steps:
+        raise ValueError("rollout horizon must be within the stream length")
+    if int(stride) <= 0:
+        raise ValueError("rollout stride must be positive")
+    if A_by_step.shape[0] != steps or B_by_step.shape[0] != steps:
+        raise ValueError("model snapshots must align with stream steps")
+    normalized_inputs = model.u_normer.transform(
+        inputs.reshape(-1, model.control_dim)
+    ).reshape(inputs.shape)
+    truth: list[np.ndarray] = []
+    prediction: list[np.ndarray] = []
+    starts = range(0, steps - int(horizon) + 1, int(stride))
+    for trajectory in range(states.shape[0]):
+        for start in starts:
+            z = model.lift(states[trajectory, start])
+            values = np.zeros((int(horizon) + 1, model.state_dim), dtype=np.float64)
+            values[0] = states[trajectory, start]
+            A = A_by_step[start]
+            B = B_by_step[start]
+            for offset in range(int(horizon)):
+                z = A @ z + B @ normalized_inputs[trajectory, start + offset]
+                values[offset + 1] = model.recover_state(z)
+            truth.append(states[trajectory, start : start + int(horizon) + 1])
+            prediction.append(values)
+    return np.stack(truth), np.stack(prediction)
 
 
 # ---------------------------------------------------------------------------

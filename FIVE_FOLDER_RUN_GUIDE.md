@@ -174,19 +174,20 @@ traj_data/outputs/full_run/<timestamp>_uncontrolled_random_manual_full/
 | `prediction/dkuc_prediction.py` | 是 | DKUC 训练、one-step/rollout 评估、图像输出。 | 可用于 LQR，KILC 另有 continuous-DKUC artifact 要求。 |
 | `prediction/dkac_prediction.py` | 是 | DKAC 训练、one-step/rollout 评估、图像输出。 | 可用于 LQR/MPC，当前 DKAC-MPC 主流程推荐用它。 |
 | `prediction/dkn_prediction.py` | 是 | DKN 训练、one-step/rollout 评估、图像输出。 | 当前主要是 prediction-only，不作为现有 LQR/MPC 线性控制模型直接入口。 |
-| `prediction/dktv_foundation_prediction.py` | 是 | DKTV 公共 fixed-DKO 训练、时变数据验证和基线评估。 | 生成 Hao/Zhang 在线更新共用的冻结 artifact。 |
-| `prediction/dktv_accumulative_prediction.py` | 是 | Hao 风格累积式在线 Koopman 更新与预测评估。 | 当前为 prediction-only。 |
-| `prediction/dktv_window_prediction.py` | 是 | Zhang 风格滑动窗口、选择性更新与预测比较。 | 当前为 prediction-only；稳定控制尚未接入。 |
+| `prediction/dktv_prediction.py` | 是 | Hao 等人的累积式 DKTV 在线更新、因果预测和 rollout 评估。 | 当前为 prediction-only。 |
+| `prediction/otvdkl_prediction.py` | 是 | Zhang 等人的 OTVDKL/OTVDKL* 滑动窗口在线更新和预测评估。 | 当前为 prediction-only；稳定控制尚未实现。 |
 
 ### 函数/模块文件
 
 | 文件 | 作用 |
 | --- | --- |
-| `prediction/common.py` | 预测阶段公共工具：数据加载、归一化、窗口采样、训练/验证划分、指标、绘图、输出目录。 |
-| `prediction/dktv/` | DKTV 三个独立入口共享的内部算法包；包含最小二乘、累积式、滑动窗口、选择性更新和回放评价。 |
-| `prediction/dktv_*_config.json` | DKTV 基础、累积式和滑动窗口方法的稳定配置。 |
+| `prediction/common.py` | 预测阶段公共工具：数据加载、归一化、Koopman 最小二乘、DKUC 批量升维、指标、绘图和输出目录。 |
 | `prediction/dataset_selections.json` | 数据集选择表，可用 `--dataset_key` 让不同方法选择不同数据集。 |
 | `prediction/outputs/` | 训练模型、metrics、预测数组、图片输出目录。 |
+
+DKTV 和 OTVDKL 是两个独立入口，但都读取冻结的 DKUC artifact。两者通过
+`--history_dataset` 指定在线更新开始前的历史数据，通过 `--stream_dataset`
+指定按时间顺序到达的在线数据；不再使用 Plan run id。
 
 ### 推荐的数据指定方式
 
@@ -240,36 +241,34 @@ prediction/outputs/full_run/figures/<timestamp>_dkac_manual_full/
 & $PY .\prediction\dkn_prediction.py  --train_dataset $DATASET --run_type full_run --pred_mode both --device cuda --tag manual_full
 ```
 
-### DKTV 独立运行顺序
+### DKTV 与 OTVDKL 在线预测
 
-DKTV 使用模块入口，并将研究 artifact 统一保存到根目录 `outputs/`：
-
-```powershell
-& $PY -m prediction.dktv_foundation_prediction `
-  --run-type smoke --device cpu --tag foundation
-```
-
-记录 Plan 01 输出的 run id 后，分别运行 Hao 和 Zhang 方法：
+先固定一次 DKUC 训练输出，并明确指定在线数据流：
 
 ```powershell
-$PLAN01_RUN = '<plan01_run_id>'
+$DKUC_ARTIFACT = 'prediction/outputs/full_run/dkuc/<dkuc_run_id>'
+$STREAM = 'traj_data/outputs/full_run/<stream_run_id>/dataset.npz'
 
-& $PY -m prediction.dktv_accumulative_prediction `
-  --run-type smoke --plan01-run $PLAN01_RUN --device cpu --tag hao
+& $PY .\prediction\dktv_prediction.py `
+  --artifact_dir $DKUC_ARTIFACT `
+  --stream_dataset $STREAM `
+  --run_type full_run `
+  --device cuda `
+  --tag hao
 
-& $PY -m prediction.dktv_window_prediction `
-  --run-type smoke --plan01-run $PLAN01_RUN --device cpu --tag zhang
+& $PY .\prediction\otvdkl_prediction.py `
+  --artifact_dir $DKUC_ARTIFACT `
+  --stream_dataset $STREAM `
+  --variant both `
+  --run_type full_run `
+  --device cuda `
+  --tag zhang
 ```
 
-多随机种子汇总入口分别为：
-
-```text
-prediction.dktv_accumulative_aggregate
-prediction.dktv_window_aggregate
-```
-
-当前 Zhang 入口只比较在线预测模型更新。论文中的稳定性保证控制完成后，
-再通过 `control/` 下的独立控制入口接入，不在 `prediction/` 内重复实现 LQR/MPC。
+如果不传 `--history_dataset`，两个入口默认读取
+`<DKUC_ARTIFACT>/dataset_train.npz`。DKTV 保存累积统计状态；OTVDKL 分别保存
+`otvdkl` 和 `otvdkl_star` 的固定窗口状态。两者都会输出 one-step/rollout
+指标、原始数组、更新历史、最终模型状态和 `manifest.json`。
 
 ## 4. `control/`：控制实验
 

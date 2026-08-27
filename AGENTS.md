@@ -79,23 +79,48 @@ common/          Shared runtime utilities and required static resources
 tests/           Automated unit and integration tests
 docs/            Plans, formula mappings, execution reports, and reviews
 legacy_system/   Historical programs retained for reproducibility
-outputs/         Generated local artifacts; never application source
+*/outputs/       Stage-local generated artifacts; never application source
 ```
 
 More specifically:
 
 - `prediction/` owns prediction models, online identification algorithms,
-  their stable configuration files, and their runnable entry points.
-- `control/` owns LQR, MPC, KILC, and future stability-guaranteed DKTV
-  control entry points.
+  their configuration, evaluation, and runnable entry points.
+- Keep one primary runnable Python file per prediction method:
+
+  ```text
+  prediction/edmd_prediction.py
+  prediction/dkuc_prediction.py
+  prediction/dkac_prediction.py
+  prediction/dkn_prediction.py
+  prediction/dktv_prediction.py      Hao et al.: accumulative DKTV update
+  prediction/otvdkl_prediction.py    Zhang et al.: sliding-window OTVDKL update
+  ```
+
+- DKTV and OTVDKL are two different prediction methods. Do not use `DKTV` as
+  an umbrella name for both, and do not merge their experiment contracts or
+  outputs.
+- DKTV and OTVDKL should reuse the existing DKUC model architecture and stable
+  loading/lifting/normalization APIs. Do not duplicate a second DKUC training
+  implementation inside either method.
+- `control/` owns control laws and closed-loop experiments such as LQR, MPC,
+  and KILC. Prediction-model online updates do not belong in `control/`.
+  Add `control/otvdkl_control.py` only when Zhang et al.'s actual
+  stability-guaranteed controller is implemented and independently testable.
 - `traj_data/` owns CDSM collection programs and data-generation helpers.
 - `common/` owns code shared by more than one main workflow, including cable
   allocation, artifact adapters, metrics, references, and static XML assets.
 - `visualization/` owns result plotting, report figures, and MuJoCo rendering.
 - `legacy_system/` is compatibility and historical evidence. Do not build new
   reusable features there unless an existing archived workflow must be repaired.
-- Keep method-specific helpers close to their independently runnable method;
-  do not introduce a second parallel `src/`/`experiments/` hierarchy.
+- Keep method-specific helpers in the corresponding method file when
+  practical. Move code to `common/` only when multiple independent methods
+  genuinely share the same contract.
+- Do not introduce a parallel `src/`, `experiments/`, or `configs/` hierarchy.
+  The five main directories are the project architecture.
+- Do not add a combined `time_varying_comparison.py` entry before DKTV and
+  OTVDKL can each run and save results independently. Paper comparisons should
+  consume the saved artifacts from the two independent runs.
 
 ## 4. Standard Execution Workflow
 
@@ -112,23 +137,25 @@ For code or experiment tasks, follow this order:
    exit code.
 8. Report the exact command, important parameters, metrics, and output paths.
 
-Run experiment entries as modules from the repository root.
+Run experiment entries by file path from the repository root. Each main entry
+must expose `--help` and run without changing into its subdirectory.
 
 Windows PowerShell:
 
 ```powershell
-& 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' -m experiments.deployment_pipeline.collect_data --help
+& 'D:\Apps\Anaconda3\envs\env_dk_cdsm\python.exe' .\prediction\dkuc_prediction.py --help
 ```
 
 Linux shell:
 
 ```bash
 env -u PYTHONPATH /home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python \
-  -m experiments.deployment_pipeline.collect_data --help
+  prediction/dkuc_prediction.py --help
 ```
 
-Prefer `-m experiments...` over invoking experiment files by path so imports
-remain stable.
+Do not add a wrapper under another hierarchy merely to launch an existing
+entry. A method may additionally support `python -m prediction.<method>`, but
+the file-path command is the required independent execution contract.
 
 Keep source and configuration paths portable: use `pathlib.Path` in Python,
 resolve project resources relative to the repository or module, and do not
@@ -141,7 +168,7 @@ also run from a Linux shell.
 
 Every meaningful experiment must preserve enough information to reproduce it:
 
-- exact entry module;
+- exact entry script;
 - command-line arguments or copied configuration;
 - random seed;
 - source dataset path and filtering rules;
@@ -166,19 +193,22 @@ For model assessment:
 
 ## 6. Output and Artifact Rules
 
-All generated research artifacts must stay under `outputs/`. They must not be
-committed or pushed to Git.
+Each independently runnable stage owns its generated artifacts locally. Do not
+create a second root-level output workflow for new experiments.
 
-Use these categories:
+Use these stage-local roots:
 
 ```text
-outputs/data/raw/          Original collected data
-outputs/data/processed/    Filtered or transformed datasets
-outputs/data/rejected/     Invalid runs retained for diagnosis
-outputs/models/            Trained models and normalizers
-outputs/results/           Metrics, arrays, figures, and animations
-outputs/archive/           Superseded smoke tests or legacy outputs
+traj_data/outputs/         Collected and validated datasets
+prediction/outputs/        Trained models and prediction evidence
+control/outputs/           Closed-loop arrays, metrics, and figures
+visualization/outputs/     Rendered media and presentation figures
 ```
+
+Use `smoke_test/` and `full_run/` below each stage root, and keep method names
+below the run type where multiple methods share the same stage. New generated
+artifacts must not be committed or pushed to Git. Existing tracked historical
+artifacts are user-owned and must not be deleted or rewritten unless requested.
 
 For a result run, keep numerical evidence separate from display products:
 
@@ -199,7 +229,7 @@ Rules:
 - Treat PNG, PDF, SVG, and GIF files as reproducible presentation products.
 - Do not duplicate the same figure across multiple output trees.
 - Do not place source code, required XML assets, or stable configuration in
-  `outputs/`.
+  any stage's `outputs/` directory.
 - Do not delete datasets, models, or results unless the user explicitly asks.
 - Before accepting a dataset, verify finite values, state range, saturation,
   and cable-tension outliers.
@@ -280,8 +310,10 @@ Do not modify global Python, system Python, or user-site packages.
 
 ## 9. Git Rules
 
-- `outputs/`, caches, local environments, IDE state, and logs must remain
-  ignored by the root `.gitignore`.
+- Do not add new generated artifacts from stage-local `outputs/` directories.
+  Add appropriate root `.gitignore` rules when a new output path is introduced;
+  preserve existing tracked historical artifacts unless the user requests a
+  separate cleanup.
 - Before finishing, run `git diff --check`.
 - Review `git status --short` and distinguish task changes from pre-existing
   changes.
@@ -296,7 +328,7 @@ Do not modify global Python, system Python, or user-site packages.
 At the end of a task, report:
 
 - files changed;
-- commands or experiment entry modules run;
+- commands or experiment entry scripts run;
 - tests and checks performed;
 - key metrics, when applicable;
 - exact output locations;

@@ -92,7 +92,7 @@ def test_otvdkl_window_matches_direct_refit() -> None:
     assert np.allclose(updater.B, oracle.B, atol=1e-8, rtol=1e-8)
 
 
-def test_otvdkl_selective_threshold_keeps_model_and_advances_window() -> None:
+def test_otvdkl_selective_threshold_keeps_model_and_window() -> None:
     z, target, u = _synthetic()
     window_size, batch_size = 50, 5
     initial = direct_refit(z[:window_size], target[:window_size], u[:window_size], ridge_lambda=1e-3)
@@ -117,6 +117,6 @@ def test_otvdkl_selective_threshold_keeps_model_and_advances_window() -> None:
     )
     assert record.status == "skipped_threshold"
     assert not record.accepted
-    assert record.window_advanced
+    assert not record.window_advanced
     assert updater.model_version == 0
-    assert updater.window_version == 1
+    assert updater.window_version == 0

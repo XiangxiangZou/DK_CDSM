@@ -351,6 +351,7 @@ def snapshot_rollout_predictions(
     *,
     horizon: int,
     stride: int,
+    start_indices: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Evaluate rollouts with the causal model snapshot available at each start."""
     validate_dataset(dataset)
@@ -368,9 +369,19 @@ def snapshot_rollout_predictions(
     ).reshape(inputs.shape)
     truth: list[np.ndarray] = []
     prediction: list[np.ndarray] = []
-    starts = range(0, steps - int(horizon) + 1, int(stride))
+    if start_indices is None:
+        starts = np.arange(0, steps - int(horizon) + 1, int(stride), dtype=np.int64)
+    else:
+        starts = np.asarray(start_indices, dtype=np.int64)
+        if starts.ndim != 1 or starts.size == 0:
+            raise ValueError("start_indices must be a non-empty one-dimensional array")
+        if np.any(starts < 0) or np.any(starts + int(horizon) > steps):
+            raise ValueError("start_indices must leave room for the requested horizon")
+        if np.unique(starts).size != starts.size or np.any(np.diff(starts) <= 0):
+            raise ValueError("start_indices must be unique and strictly increasing")
     for trajectory in range(states.shape[0]):
         for start in starts:
+            start = int(start)
             z = model.lift(states[trajectory, start])
             values = np.zeros((int(horizon) + 1, model.state_dim), dtype=np.float64)
             values[0] = states[trajectory, start]

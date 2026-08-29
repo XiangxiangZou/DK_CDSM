@@ -8,6 +8,10 @@
 /runs/
 /checkpoints/
 /logs/
+/traj_data/outputs/
+/prediction/outputs/
+/control/outputs/
+/visualization/outputs/
 
 # Python bytecode and tool caches
 __pycache__/

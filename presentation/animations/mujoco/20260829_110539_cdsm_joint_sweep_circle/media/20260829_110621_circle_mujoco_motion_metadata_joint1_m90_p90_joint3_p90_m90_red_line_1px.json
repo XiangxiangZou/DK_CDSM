@@ -1,0 +1,28 @@
+{
+  "result_dir": "presentation/animations/mujoco/20260829_110539_cdsm_joint_sweep_circle",
+  "trajectory": "circle",
+  "models": [
+    "kinematic"
+  ],
+  "xml": "common/assets/multi_joint_cable_driven_space_robot.xml",
+  "dt": 0.01,
+  "render_stride": 4,
+  "fps": 25.0,
+  "width": 960,
+  "height": 720,
+  "trajectory_overlay": {
+    "desired_path": false,
+    "actual_trail": true,
+    "current_point": false,
+    "desired_path_style": "white dashed",
+    "actual_trail_style": "red solid",
+    "desired_path_stride": 3,
+    "actual_trail_stride": 1,
+    "desired_line_width_m": 0.025,
+    "actual_line_width_m": 0.004,
+    "trajectory_overlay_z": 0.08
+  },
+  "outputs": {
+    "kinematic": "presentation/animations/mujoco/20260829_110539_cdsm_joint_sweep_circle/media/20260829_110621_circle_kinematic_mujoco_motion_joint1_m90_p90_joint3_p90_m90_red_line_1px.gif"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-08-29T11:06:21+08:00",
+  "updated_at": "2026-08-29T11:24:18+08:00",
+  "entry_script": "visualization/entrypoints/render_animation.py",
+  "python_executable": "/home/zouxx/Apps/miniconda3/envs/env_dk_cdsm/bin/python",
+  "python_environment": "env_dk_cdsm",
+  "git_branch": "pre",
+  "git_commit": "9dfc7056932b20929b42279d8caa5854493eef08",
+  "random_seed": null,
+  "generation_mode": "deterministic direct joint sweep with MuJoCo forward kinematics",
+  "xml_model": "common/assets/multi_joint_cable_driven_space_robot.xml",
+  "trajectory": {
+    "duration_s": 8.0,
+    "dt_s": 0.01,
+    "samples": 801,
+    "joint1_deg": [-90.0, 90.0],
+    "joint3_deg": [90.0, -90.0],
+    "interpolation": "linear"
+  },
+  "render": {
+    "render_stride": 4,
+    "fps": 25.0,
+    "actual_trail": "red solid",
+    "requested_visual_line_width_px": 1.0,
+    "current_point": false,
+    "desired_path": false,
+    "gif": {
+      "resolution_px": [960, 720],
+      "mujoco_world_line_width_m": 0.004
+    },
+    "mp4": {
+      "resolution_px": [1920, 1080],
+      "codec": "h264",
+      "profile": "High",
+      "pixel_format": "yuv420p",
+      "mujoco_world_line_width_m": 0.0027
+    }
+  },
+  "arrays": "arrays/closed_loop_kinematic.npz",
+  "metrics": "metrics/kinematic_metrics.json",
+  "media": {
+    "gif": "media/20260829_110621_circle_kinematic_mujoco_motion_joint1_m90_p90_joint3_p90_m90_red_line_1px.gif",
+    "mp4": "media/20260829_112418_circle_kinematic_mujoco_motion_joint1_m90_p90_joint3_p90_m90_red_line_1px_1080p.mp4"
+  },
+  "metadata": {
+    "gif": "media/20260829_110621_circle_mujoco_motion_metadata_joint1_m90_p90_joint3_p90_m90_red_line_1px.json",
+    "mp4": "media/20260829_112418_circle_mujoco_motion_metadata_joint1_m90_p90_joint3_p90_m90_red_line_1px_1080p.json"
+  }
+}

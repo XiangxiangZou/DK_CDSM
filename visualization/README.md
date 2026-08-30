@@ -1,11 +1,11 @@
 # visualization 可视化模块说明
 
-`visualization/` 用于集中整理仓库中的绘图、MuJoCo 动画渲染、GIF 生成和历史可视化工具。当前整理策略是复制并归类源码，不移动已有实验输出，避免破坏已经生成的 `outputs/`、`prediction/outputs/`、`control/outputs/` 结果。
+`visualization/` 用于集中整理仓库中的绘图、MuJoCo 动画渲染、GIF/MP4 生成和历史可视化工具。当前整理策略是复制并归类源码，不移动已有实验输出，避免破坏已经生成的 `outputs/`、`prediction/outputs/`、`control/outputs/` 结果。
 
 ## 推荐入口
 
 - `entrypoints/render_animation.py`
-  - 单个模型的 MuJoCo 运动 GIF 渲染入口。
+  - 单个模型的 MuJoCo 运动 GIF/MP4 渲染入口；默认同时输出两种格式。
   - 调用 `mujoco/mujoco_animation.py`。
 
 - `entrypoints/render_combined_animation.py`
@@ -26,7 +26,7 @@
 ## MuJoCo 动画
 
 - `mujoco/mujoco_animation.py`
-  - 从闭环日志回放每个模型的 MuJoCo 运动，分别生成 GIF。
+  - 从闭环日志回放每个模型的 MuJoCo 运动，分别生成 GIF 和 H.264 MP4。
 
 - `mujoco/combined_mujoco_animation.py`
   - 在一个 MuJoCo GIF 中叠加多种方法的末端轨迹。

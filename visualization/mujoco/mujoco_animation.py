@@ -12,17 +12,20 @@ results/cartesian_tracking/<timestamp>_.../circle/
 ```
 
 然后把每个方法记录的真实状态 `x_meas=[qa,qb,dqa,dqb]` 逐帧写回 MuJoCo 模型，
-用 MuJoCo 离屏 Renderer 保存机械臂运动 GIF。这样动画展示的是控制器已经作用到
+用 MuJoCo 离屏 Renderer 保存机械臂运动 GIF 和 MP4。这样动画展示的是控制器已经作用到
 “MuJoCo 真实机械臂”后的实际运动，而不是模型预测轨迹。
 """
 
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Iterator, List
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -35,7 +38,7 @@ from visualization.path_setup import DEFAULT_XML, PROJECT_ROOT
 from cdsm.plants.mujoco import MujocoCablePlant
 from common.artifacts import save_json
 
-CONTROL_MODELS = ("edmd", "dkuc", "dkac")
+CONTROL_MODELS = ("edmd", "dkuc", "dkac", "kinematic")
 
 
 ACTUAL_TRAIL_COLORS = {
@@ -58,7 +61,7 @@ def _require_mujoco():
 def build_parser() -> argparse.ArgumentParser:
     """构造 MuJoCo 动画渲染命令行参数。"""
     parser = argparse.ArgumentParser(
-        description="读取闭环跟踪结果，回放 q,dq 并保存三种方法的 MuJoCo 运动 GIF。",
+        description="读取闭环或运动学结果，回放 q,dq 并保存 MuJoCo 运动 GIF/MP4。",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -82,13 +85,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="需要保存动画的控制方法。",
     )
     parser.add_argument(
+        "--formats",
+        nargs="+",
+        choices=("gif", "mp4"),
+        default=["gif", "mp4"],
+        help="需要保存的动画格式；汇报动画默认同时保存 GIF 和 MP4。",
+    )
+    parser.add_argument(
         "--xml",
         default=str(DEFAULT_XML),
         help="MuJoCo XML 路径。",
     )
     parser.add_argument("--dt", type=float, default=0.01, help="闭环日志对应的控制周期，单位 s。")
-    parser.add_argument("--width", type=int, default=960, help="动画宽度，单位像素。")
-    parser.add_argument("--height", type=int, default=720, help="动画高度，单位像素。")
+    parser.add_argument("--width", type=int, default=1920, help="动画宽度，单位像素。")
+    parser.add_argument("--height", type=int, default=1080, help="动画高度，单位像素。")
     parser.add_argument(
         "--render_stride",
         type=int,
@@ -99,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--fps",
         type=float,
         default=0.0,
-        help="GIF 播放帧率；0 表示根据日志 dt 和 render_stride 保持近似真实时间。",
+        help="动画播放帧率；0 表示根据日志 dt 和 render_stride 保持近似真实时间。",
     )
     parser.add_argument("--camera_lookat_x", type=float, default=3.2, help="自由相机 lookat x。")
     parser.add_argument("--camera_lookat_y", type=float, default=0.0, help="自由相机 lookat y。")
@@ -117,6 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no_actual_trail",
         action="store_true",
         help="不绘制实际末端运动轨迹。",
+    )
+    overlay_group.add_argument(
+        "--no_current_point",
+        action="store_true",
+        help="不在实际末端轨迹末端绘制同色标记球。",
     )
     overlay_group.add_argument(
         "--actual_trail_color",
@@ -208,6 +223,13 @@ def _gif_duration_ms(dt: float, stride: int, fps: float) -> int:
     if fps and fps > 0.0:
         return max(1, int(round(1000.0 / float(fps))))
     return max(1, int(round(1000.0 * float(dt) * max(int(stride), 1))))
+
+
+def _effective_fps(dt: float, stride: int, fps: float) -> float:
+    """返回 GIF/MP4 共用的有效播放帧率。"""
+    if fps and fps > 0.0:
+        return float(fps)
+    return 1.0 / (float(dt) * max(int(stride), 1))
 
 
 def _xy_to_xyz(points_xy: np.ndarray, z: float) -> np.ndarray:
@@ -320,7 +342,7 @@ def _add_trajectory_overlays(
             stride=int(args.actual_trail_stride),
             dashed=False,
         )
-        if trail.shape[0] > 0:
+        if trail.shape[0] > 0 and not args.no_current_point:
             _add_current_point(
                 scene,
                 trail[-1],
@@ -345,6 +367,59 @@ def _annotate_frame(frame: np.ndarray, *, model_name: str, sim_time: float) -> I
     return image
 
 
+def _iter_rendered_frames(
+    *,
+    model_name: str,
+    log: Dict[str, np.ndarray],
+    xml: str | Path,
+    dt: float,
+    args: argparse.Namespace,
+) -> Iterator[Image.Image]:
+    """逐帧回放单个模型，并产出带标注的 RGB 图像。
+
+    参数:
+        model_name: 控制方法名。
+        log: `closed_loop_<model>.npz` 读取出的日志。
+        xml: MuJoCo XML 路径。
+        dt: 控制周期，单位 s。
+        args: 渲染参数集合。
+    """
+    mujoco = _require_mujoco()
+    plant = MujocoCablePlant(xml, dt)
+    plant.model.vis.global_.offwidth = max(
+        int(plant.model.vis.global_.offwidth),
+        int(args.width),
+    )
+    plant.model.vis.global_.offheight = max(
+        int(plant.model.vis.global_.offheight),
+        int(args.height),
+    )
+    renderer = mujoco.Renderer(plant.model, height=int(args.height), width=int(args.width))
+    camera = _build_camera(args)
+    states = np.asarray(log["x_meas"], dtype=np.float64)
+    times = np.asarray(log.get("t", np.arange(states.shape[0]) * float(dt)), dtype=np.float64)
+    desired_xy = np.asarray(log["ee_ref"], dtype=np.float64) if "ee_ref" in log else None
+    actual_xy = np.asarray(log["ee_meas"], dtype=np.float64) if "ee_meas" in log else None
+    indices = _frame_indices(states.shape[0], int(args.render_stride))
+    try:
+        for idx in indices:
+            q = states[idx, :2]
+            dq = states[idx, 2:]
+            plant.set_state(q, dq)
+            renderer.update_scene(plant.data, camera=camera)
+            _add_trajectory_overlays(
+                renderer.scene,
+                desired_xy=desired_xy,
+                actual_xy=actual_xy,
+                upto_index=int(idx),
+                args=args,
+            )
+            frame = renderer.render()
+            yield _annotate_frame(frame, model_name=model_name, sim_time=float(times[idx]))
+    finally:
+        renderer.close()
+
+
 def render_model_gif(
     *,
     model_name: str,
@@ -354,42 +429,19 @@ def render_model_gif(
     out_path: str | Path,
     args: argparse.Namespace,
 ) -> Path:
-    """把单个模型的闭环日志渲染为 GIF。
-
-    参数:
-        model_name: 控制方法名。
-        log: `closed_loop_<model>.npz` 读取出的日志。
-        xml: MuJoCo XML 路径。
-        dt: 控制周期，单位 s。
-        out_path: GIF 输出路径。
-        args: 渲染参数集合。
-    """
-    mujoco = _require_mujoco()
-    plant = MujocoCablePlant(xml, dt)
-    renderer = mujoco.Renderer(plant.model, height=int(args.height), width=int(args.width))
-    camera = _build_camera(args)
-    states = np.asarray(log["x_meas"], dtype=np.float64)
-    times = np.asarray(log.get("t", np.arange(states.shape[0]) * float(dt)), dtype=np.float64)
-    desired_xy = np.asarray(log["ee_ref"], dtype=np.float64) if "ee_ref" in log else None
-    actual_xy = np.asarray(log["ee_meas"], dtype=np.float64) if "ee_meas" in log else None
-    indices = _frame_indices(states.shape[0], int(args.render_stride))
+    """把单个模型的闭环日志渲染为 GIF。"""
     duration = _gif_duration_ms(dt, int(args.render_stride), float(args.fps))
-
-    frames: List[Image.Image] = []
-    for idx in indices:
-        q = states[idx, :2]
-        dq = states[idx, 2:]
-        plant.set_state(q, dq)
-        renderer.update_scene(plant.data, camera=camera)
-        _add_trajectory_overlays(
-            renderer.scene,
-            desired_xy=desired_xy,
-            actual_xy=actual_xy,
-            upto_index=int(idx),
+    frames = list(
+        _iter_rendered_frames(
+            model_name=model_name,
+            log=log,
+            xml=xml,
+            dt=dt,
             args=args,
         )
-        frame = renderer.render()
-        frames.append(_annotate_frame(frame, model_name=model_name, sim_time=float(times[idx])))
+    )
+    if not frames:
+        raise ValueError("Cannot save an animation without rendered frames.")
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -401,12 +453,239 @@ def render_model_gif(
         loop=0,
         optimize=True,
     )
-    renderer.close()
     return out
 
 
+def render_model_mp4(
+    *,
+    model_name: str,
+    log: Dict[str, np.ndarray],
+    xml: str | Path,
+    dt: float,
+    out_path: str | Path,
+    args: argparse.Namespace,
+) -> Path:
+    """把单个模型的闭环日志逐帧编码为 H.264 MP4。"""
+    width = int(args.width)
+    height = int(args.height)
+    if width <= 0 or height <= 0 or width % 2 or height % 2:
+        raise ValueError("MP4 width and height must be positive even integers.")
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise RuntimeError("ffmpeg is required to save MP4 animations.")
+
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fps = _effective_fps(dt, int(args.render_stride), float(args.fps))
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s:v",
+        f"{width}x{height}",
+        "-r",
+        f"{fps:.12g}",
+        "-i",
+        "-",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(out),
+    ]
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    if process.stdin is None or process.stderr is None:  # pragma: no cover
+        process.kill()
+        raise RuntimeError("Failed to open ffmpeg pipes.")
+    try:
+        for frame in _iter_rendered_frames(
+            model_name=model_name,
+            log=log,
+            xml=xml,
+            dt=dt,
+            args=args,
+        ):
+            rgb = np.asarray(frame.convert("RGB"), dtype=np.uint8)
+            process.stdin.write(rgb.tobytes())
+        process.stdin.close()
+        error_text = process.stderr.read().decode("utf-8", errors="replace")
+        return_code = process.wait()
+    except BaseException:
+        if not process.stdin.closed:
+            process.stdin.close()
+        process.kill()
+        process.wait()
+        out.unlink(missing_ok=True)
+        raise
+    if return_code != 0:
+        out.unlink(missing_ok=True)
+        raise RuntimeError(f"ffmpeg failed with exit code {return_code}: {error_text.strip()}")
+    return out
+
+
+def render_model_gif_mp4(
+    *,
+    model_name: str,
+    log: Dict[str, np.ndarray],
+    xml: str | Path,
+    dt: float,
+    gif_path: str | Path,
+    mp4_path: str | Path,
+    args: argparse.Namespace,
+) -> Dict[str, Path]:
+    """只回放一次 MuJoCo，同时保存 GIF 和 H.264 MP4。"""
+    width = int(args.width)
+    height = int(args.height)
+    if width <= 0 or height <= 0 or width % 2 or height % 2:
+        raise ValueError("MP4 width and height must be positive even integers.")
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise RuntimeError("ffmpeg is required to save GIF/MP4 animations.")
+
+    gif_out = Path(gif_path)
+    mp4_out = Path(mp4_path)
+    gif_out.parent.mkdir(parents=True, exist_ok=True)
+    mp4_out.parent.mkdir(parents=True, exist_ok=True)
+    fps = _effective_fps(dt, int(args.render_stride), float(args.fps))
+    mp4_command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s:v",
+        f"{width}x{height}",
+        "-r",
+        f"{fps:.12g}",
+        "-i",
+        "-",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(mp4_out),
+    ]
+    process = subprocess.Popen(
+        mp4_command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    if process.stdin is None or process.stderr is None:  # pragma: no cover
+        process.kill()
+        raise RuntimeError("Failed to open ffmpeg pipes.")
+
+    with tempfile.TemporaryDirectory(prefix="cdsm_animation_frames_") as temp_dir:
+        frame_root = Path(temp_dir)
+        try:
+            frame_count = 0
+            for frame_count, frame in enumerate(
+                _iter_rendered_frames(
+                    model_name=model_name,
+                    log=log,
+                    xml=xml,
+                    dt=dt,
+                    args=args,
+                ),
+                start=1,
+            ):
+                rgb = frame.convert("RGB")
+                rgb.save(frame_root / f"frame_{frame_count:06d}.png", compress_level=1)
+                process.stdin.write(np.asarray(rgb, dtype=np.uint8).tobytes())
+            if frame_count == 0:
+                raise ValueError("Cannot save an animation without rendered frames.")
+            process.stdin.close()
+            error_text = process.stderr.read().decode("utf-8", errors="replace")
+            return_code = process.wait()
+            if return_code != 0:
+                raise RuntimeError(
+                    f"ffmpeg MP4 encoding failed with exit code {return_code}: {error_text.strip()}"
+                )
+
+            palette_path = frame_root / "palette.png"
+            subprocess.run(
+                [
+                    ffmpeg,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-framerate",
+                    f"{fps:.12g}",
+                    "-i",
+                    str(frame_root / "frame_%06d.png"),
+                    "-vf",
+                    "palettegen=stats_mode=diff",
+                    "-frames:v",
+                    "1",
+                    str(palette_path),
+                ],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    ffmpeg,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-framerate",
+                    f"{fps:.12g}",
+                    "-i",
+                    str(frame_root / "frame_%06d.png"),
+                    "-i",
+                    str(palette_path),
+                    "-lavfi",
+                    "paletteuse=dither=sierra2_4a",
+                    "-loop",
+                    "0",
+                    str(gif_out),
+                ],
+                check=True,
+            )
+        except BaseException:
+            if process.poll() is None:
+                if not process.stdin.closed:
+                    process.stdin.close()
+                process.kill()
+                process.wait()
+            gif_out.unlink(missing_ok=True)
+            mp4_out.unlink(missing_ok=True)
+            raise
+    return {"gif": gif_out, "mp4": mp4_out}
+
+
 def main() -> None:
-    """命令行入口：为三种控制方法保存 MuJoCo GIF 动画。"""
+    """命令行入口：保存 MuJoCo GIF/MP4 动画。"""
     args = build_parser().parse_args()
     if args.result_dir:
         result_dir = Path(args.result_dir)
@@ -430,40 +709,74 @@ def main() -> None:
     print("=== CDSM MuJoCo motion animation render ===")
     print(f"result_dir={result_dir}")
     print(f"models={args.models}")
+    print(f"formats={args.formats}")
     print(f"output={out_dir}")
 
     outputs = {}
+    formats = list(dict.fromkeys(args.formats))
     for model_name in args.models:
         log = load_log(result_dir, model_name)
-        out_path = out_dir / f"{stamp}_{args.trajectory}_{model_name}_mujoco_motion{suffix}.gif"
-        saved = render_model_gif(
-            model_name=model_name,
-            log=log,
-            xml=args.xml,
-            dt=args.dt,
-            out_path=out_path,
-            args=args,
-        )
-        outputs[model_name] = str(saved)
-        print(f"[saved] {model_name}: {saved}")
+        stem = f"{stamp}_{args.trajectory}_{model_name}_mujoco_motion{suffix}"
+        model_outputs = {}
+        if "gif" in formats and "mp4" in formats:
+            saved_paths = render_model_gif_mp4(
+                model_name=model_name,
+                log=log,
+                xml=args.xml,
+                dt=args.dt,
+                gif_path=out_dir / f"{stem}.gif",
+                mp4_path=out_dir / f"{stem}.mp4",
+                args=args,
+            )
+            for output_format, saved in saved_paths.items():
+                model_outputs[output_format] = str(saved)
+                print(f"[saved] {model_name}/{output_format}: {saved}")
+        elif "gif" in formats:
+            gif_path = render_model_gif(
+                model_name=model_name,
+                log=log,
+                xml=args.xml,
+                dt=args.dt,
+                out_path=out_dir / f"{stem}.gif",
+                args=args,
+            )
+            model_outputs["gif"] = str(gif_path)
+            print(f"[saved] {model_name}/gif: {gif_path}")
+        elif "mp4" in formats:
+            mp4_path = render_model_mp4(
+                model_name=model_name,
+                log=log,
+                xml=args.xml,
+                dt=args.dt,
+                out_path=out_dir / f"{stem}.mp4",
+                args=args,
+            )
+            model_outputs["mp4"] = str(mp4_path)
+            print(f"[saved] {model_name}/mp4: {mp4_path}")
+        outputs[model_name] = model_outputs
 
     meta = {
         "result_dir": str(result_dir),
         "trajectory": args.trajectory,
         "models": list(args.models),
+        "formats": formats,
         "xml": str(args.xml),
         "dt": args.dt,
         "render_stride": args.render_stride,
         "fps": args.fps,
+        "effective_fps": _effective_fps(args.dt, args.render_stride, args.fps),
         "width": args.width,
         "height": args.height,
         "trajectory_overlay": {
             "desired_path": not args.no_desired_path,
             "actual_trail": not args.no_actual_trail,
+            "current_point": not args.no_current_point,
             "desired_path_style": "white dashed",
             "actual_trail_style": f"{args.actual_trail_color} solid",
             "desired_path_stride": args.desired_path_stride,
             "actual_trail_stride": args.actual_trail_stride,
+            "desired_line_width_m": args.desired_line_width,
+            "actual_line_width_m": args.actual_line_width,
             "trajectory_overlay_z": args.trajectory_overlay_z,
         },
         "outputs": outputs,

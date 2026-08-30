@@ -1,0 +1,48 @@
+{
+  "samples": 801,
+  "all_finite": true,
+  "joint_motion_deg": {
+    "joint1": {
+      "start": -90.0,
+      "end": 90.0,
+      "minimum": -90.0,
+      "maximum": 90.0
+    },
+    "joint3": {
+      "start": 90.0,
+      "end": -90.0,
+      "minimum": -90.0,
+      "maximum": 90.0
+    }
+  },
+  "end_effector_xy_m": {
+    "start": [2.0, -0.4],
+    "middle": [6.4, 9.76996262e-16],
+    "end": [2.0, 0.4]
+  },
+  "circle_fit": {
+    "center_xy_m": [4.15725094, -8.8817842e-16],
+    "radius_m": 2.2633701973785714,
+    "radial_rmse_m": 0.02242422536506295,
+    "maximum_radial_error_m": 0.06934840630806072,
+    "endpoint_distance_m": 0.8000000000000018
+  },
+  "gif": {
+    "width_px": 960,
+    "height_px": 720,
+    "frames": 201,
+    "fps": 25.0,
+    "duration_s": 8.04
+  },
+  "mp4": {
+    "codec": "h264",
+    "profile": "High",
+    "pixel_format": "yuv420p",
+    "width_px": 1920,
+    "height_px": 1080,
+    "frames": 201,
+    "fps": 25.0,
+    "duration_s": 8.04,
+    "size_bytes": 879811
+  }
+}

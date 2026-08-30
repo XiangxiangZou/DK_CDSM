@@ -1,13 +1,13 @@
-# Generated experiment artifacts
-/output/
-/outputs/
-/Figs/
-/mj_sim_log/
-/simulation_logs/
-/results/
-/runs/
-/checkpoints/
-/logs/
+# Generated experiment artifacts (match at any level, not just repo root)
+output/
+outputs/
+Figs/
+mj_sim_log/
+simulation_logs/
+results/
+runs/
+checkpoints/
+logs/
 
 # Python bytecode and tool caches
 __pycache__/
